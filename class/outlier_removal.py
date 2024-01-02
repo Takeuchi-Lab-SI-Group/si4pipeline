@@ -38,8 +38,8 @@ def cook_distance(X,y,M,O,lamda):
             outlier.append(i)
 
     # 元の特徴に基づいた結果
-    outlier2 = [num_outlier_data[i] for i in outlier]
-    O = O + outlier2
+    O2 = [num_outlier_data[i] for i in outlier]
+    O += O2
 
     return O
 
@@ -81,14 +81,17 @@ def dffits(X,y,M,O,lamda):
             outlier.append(i)
 
     # 元の特徴に基づいた結果
-    outlier2 = [num_outlier_data[i] for i in outlier]
-    O = O + outlier2
+    O2 = [num_outlier_data[i] for i in outlier]
+    O += O2
 
     return O
 
 # soft-ipodで用いるハイパーパラメータの計算
-def soft_IPOD_lambda(X):
-    nsim = 3000
+def soft_IPOD_lambda(X,M,O):
+    X = np.delete(X,[O],0)
+    X = X[:,M]
+    
+    nsim = 5000
     lamda_list = np.array([])
     
     n = X.shape[0]
@@ -130,10 +133,8 @@ def soft_ipod(X,y,M,O,lamda):
     clf.fit(PXperp,PXperpy)
     coef = clf.coef_
     outlier = np.where(coef!=0)[0].tolist() #外れ値
-    non_outlier = np.where(coef==0)[0].tolist() #非外れ値
-    s = np.sign(coef[outlier])
 
-    outlier2 = [num_outlier_data[i] for i in outlier]
-    O = O + outlier2
+    O2 = [num_outlier_data[i] for i in outlier]
+    O += O2
 
     return O

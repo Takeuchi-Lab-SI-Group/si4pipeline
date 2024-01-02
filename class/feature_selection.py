@@ -15,8 +15,7 @@ def ms(X,y,M,O,k):
     sort_XTy_abs = np.argsort(XTy_abs)[::-1]
 
     A = sort_XTy_abs[:k]
-    Ac = sort_XTy_abs[k:]
-
+    
     M = [M[i] for i in A]
 
     return M
@@ -53,7 +52,6 @@ def sfs(X,y,M,O,k):
     # sfs
     A = []
     Ac = list(range(X.shape[1]))
-    s = []
 
     for i in range(k):
         XA = X[:,A]
@@ -61,8 +59,6 @@ def sfs(X,y,M,O,k):
         correlation = X[:,Ac].T @ r 
 
         index = np.argmax(np.abs(correlation)) #何番目の要素が最大か？
-
-        s.append(np.sign(correlation[index]))
 
         A.append(Ac[index])
         Ac.remove(Ac[index])

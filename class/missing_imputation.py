@@ -18,7 +18,6 @@ def mean_value_imputation(X,y,sigma):
 
     # 欠損値補完，(100,1)に変換
     y[missing_index] = y_mean
-    # y = y.reshape((n,1))
 
     # yの分散共分散行列の変更
     cov = np.identity(n)
@@ -60,8 +59,6 @@ def euclidean_imputation(X,y,sigma):
 
         idx_list.append(idx)
 
-    # y = y.reshape((X.shape[0],1))
-
     # 6. 分散共分散行列の作成
     cov = np.identity(X.shape[0])
 
@@ -98,8 +95,6 @@ def manhattan_imputation(X,y,sigma):
 
         idx_list.append(idx)
 
-    # y = y.reshape((X.shape[0],1))
-
     # 6. 分散共分散行列の作成
     cov = np.identity(X.shape[0])
 
@@ -134,8 +129,6 @@ def chebyshev_imputation(X,y,sigma):
         y[index_random] = y[idx]
 
         idx_list.append(idx)
-
-    # y = y.reshape((X.shape[0],1))
 
     # 6. 分散共分散行列の作成
     cov = np.identity(X.shape[0])
@@ -191,8 +184,6 @@ def regression_definite_imputation(X,y,sigma):
             cov[i,index_random] = var_missing
             cov[index_random,i] = var_missing
 
-    # y = y.reshape((n,1))
-
     return X,y,cov
 
 # 確率的
@@ -242,9 +233,5 @@ def regression_probabilistic_imputation(X,y,sigma):
                 var_missing = sigma**2 * each_x @ np.linalg.inv(X_delete.T @ X_delete) @ X_missing.T
                 cov[i,index_random] = var_missing
                 cov[index_random,i] = var_missing
-
-            #var_missing = (sigma * each_x.T @ np.linalg.inv(X_delete.T @ X_delete) @ X_missing)[0,0]
-
-    # y = y.reshape((n,1))
 
     return X,y,cov

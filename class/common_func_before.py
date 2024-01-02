@@ -10,9 +10,6 @@ def data_generation(n,p,beta_vec,mu_vec):
     X = np.random.randn(n,p)
     true_y = np.zeros(n)
     y = X @ beta_vec + np.random.randn(n) + mu_vec
-    
-    # y = y.reshape((n,1))
-    # true_y = true_y.reshape((n,1))
 
     return X,y,true_y
 
@@ -22,46 +19,8 @@ def data_generation_seed(i,n,p,beta_vec,mu_vec):
     X = np.random.randn(n,p)
     true_y = np.zeros(n)
     y = X @ beta_vec + np.random.randn(n) + mu_vec
-    
-    # y = y.reshape((n,1))
-    # true_y = true_y.reshape((n,1))
 
     return X,y,true_y
-
-# 選択された特徴，外れ値集合を考慮した検定統計量の計算
-# def compute_eta(j_selected,A,X,y,outlier):
-#     n = y.shape[0]
-#     ej = []
-#     ej = [1 if j_select == j_selected else 0 for j_select in A]
-#     ej = np.array(ej).reshape((len(A),1))
-#     Im = np.eye(n)
-#     Im = np.delete(Im,[outlier],0)
-#     etaj = (np.linalg.inv(X.T @ X) @ X.T @ Im).T @ ej
-#     etajTy = np.dot(etaj.T,y)[0][0]
-
-#     return etaj,etajTy
-
-def compute_eta(X,y,M,O,j_selected):
-    n = y.shape[0]
-
-    # Xの変更
-    X = np.delete(X,[O],0) # 外れ値の除去
-    X = X[:,M] # 特徴の除去
-
-    # ejの設定
-    ej = []
-    ej = [1 if j_select == j_selected else 0 for j_select in M]
-    ej = np.array(ej).reshape((len(M),1))
-    
-    # Imの設定
-    Im = np.eye(n)
-    Im = np.delete(Im,[O],0)
-    
-    # etaj,etajTyの計算
-    etaj = (np.linalg.inv(X.T @ X) @ X.T @ Im).T @ ej
-    etajTy = np.dot(etaj.T,y)[0][0]
-
-    return etaj,etajTy
 
 # 標準化
 def Standardization(X,y):
@@ -85,39 +44,6 @@ def Normalization(X,y):
     y_new = (y - min_y) / (max_y - min_y)
 
     return X_new,y_new
-
-def compute_eta(X,y,M,O,j_selected):
-    n = y.shape[0]
-
-    # Xの変更
-    X = np.delete(X,[O],0) # 外れ値の除去
-    X = X[:,M] # 特徴の除去
-
-    # ejの設定
-    ej = [1 if j_select == j_selected else 0 for j_select in M]
-    ej = np.array(ej).reshape(-1,1)
-    
-    # Imの設定
-    Im = np.eye(n)
-    Im = np.delete(Im,[O],0)
-    
-    # etaj,etajTyの計算
-    etaj = (np.linalg.inv(X.T @ X) @ X.T @ Im).T @ ej
-    etajTy = np.dot(etaj.T,y)[0][0]
-
-    return etaj,etajTy
-
-# a,bの計算
-def compute_a_b(n,etaj,y):
-    eta_norm = np.linalg.norm(etaj)**2
-    In = np.identity(n)
-    c = np.dot(etaj,np.linalg.inv(np.dot(etaj.T,etaj)))
-    cetaT = np.dot(c,etaj.T)
-    # alpha,betaの計算でreshapeしている
-    a = (np.dot(In - cetaT,y)).reshape(-1)
-    b = (etaj / eta_norm).reshape(-1)
-
-    return a,b  
 
 # 検定に関わるパラメータの計算
 def compute_teststatistics(X,y,M,O,j_selected,cov):
@@ -143,7 +69,6 @@ def compute_teststatistics(X,y,M,O,j_selected,cov):
     var = etaj.T @ cov @ etaj
 
     b = (cov @ etaj) / var
-    #a = (np.identity(n) - b @ etaj.T) @ y
     a = (np.identity(n) - b.reshape(-1,1) @ etaj.reshape(1,-1)) @ y
     
     return a,b,z_obs,var
@@ -217,3 +142,28 @@ def interval_disassembly(interval1,interval2):
             j += 1
     
     return interval_list
+
+def check_interval(interval1,interval2):
+    interval_list = []
+    i, j = 0, 0
+
+    while i < len(interval1) and j < len(interval2):
+        interval1 = convert_to_nested_list(interval1)
+        interval2 = convert_to_nested_list(interval2)
+        
+        L1, U1 = interval1[i]
+        L2, U2 = interval2[j]
+
+        # インターバルが重なっている場合
+        if U2 > L1 and U1 > L2:
+            new_L = max(L1,L2)
+            new_U = min(U1,U2)
+            interval_list.append([new_L,new_U])
+
+        # 次のインターバルに進みます
+        if U1 < U2:
+            i += 1
+        else:
+            j += 1
+    
+    return len(interval_list) > 0
