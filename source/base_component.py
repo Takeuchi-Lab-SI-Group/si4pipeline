@@ -288,8 +288,8 @@ class FeatureSelection:
     def __init__(
         self,
         name: str,
-        parameters: float | list[float],
-        candidates: list[float] | list[list[float]],
+        parameters,
+        candidates,
     ):
         self.parameters = parameters
         self.candidates = candidates
@@ -336,8 +336,8 @@ class OutlierDetection:
     def __init__(
         self,
         name: str,
-        parameters: float | list[float],
-        candidates: list[float] | list[list[float]],
+        parameters,
+        candidates,
     ):
         self.parameters = parameters
         self.candidates = candidates
