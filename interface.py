@@ -143,7 +143,7 @@ class PipelineStructure:
         self.calculators = []
         results = []
         for eta in self.etas:
-            if len(np.array(self.cov)) == 0:
+            if len(np.array(self.cov).shape) == 0:
                 max_tail = 20 * np.sqrt(self.cov * eta @ eta)
             else:
                 max_tail = 20 * np.sqrt(eta @ self.cov @ eta)
@@ -156,7 +156,9 @@ class PipelineStructure:
             )
             results.append(result)
             self.calculators.append(calculator)
-        return self.M, results
+        if test_index is None:
+            return self.M, results
+        return self.M[test_index], results[0]
 
     def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
         outputs = dict()
@@ -174,13 +176,10 @@ class PipelineStructure:
                 layer = self.components[node]
                 parants = list(self.graph[node])
                 assert len(parants) == 1
-                selected_features, detected_outliers, prev_l, prev_u = outputs[
-                    parants[0]
-                ]
+                selected_features, detected_outliers, l, u = outputs[parants[0]]
                 selected_features, detected_outliers, l, u = layer.perform_si(
-                    a, b, z, feature_matrix, selected_features, detected_outliers
+                    a, b, z, feature_matrix, selected_features, detected_outliers, l, u
                 )
-                l, u = np.max([l, prev_l]), np.min([u, prev_u])
                 outputs[node] = (selected_features, detected_outliers, l, u)
 
             elif isinstance(
@@ -599,7 +598,67 @@ class StepwiseFeatureSelection(FeatureSelection):
         l: float,
         u: float,
     ) -> (list[int], list[int], float, float):
-        pass
+        X, y = feature_matrix, a + b * z
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+        y = np.delete(y, O).reshape(-1, 1)
+
+        a, b = np.delete(a, O), np.delete(b, O)
+
+        active_set = []
+        inactive_set = list(range(X.shape[1]))
+        signs = []
+
+        for _ in range(self.parameters):
+            X_active = X[:, active_set]
+            r = y - X_active @ np.linalg.inv(X_active.T @ X_active) @ X_active.T @ y
+            correlation = X[:, inactive_set].T @ r
+
+            ind = np.argmax(np.abs(correlation))
+            active_set.append(inactive_set[ind])
+            inactive_set.remove(inactive_set[ind])
+            signs.append(np.sign(correlation[ind]))
+
+        l_list, u_list = [l], [u]
+        inactive_set = list(range(X.shape[1]))
+
+        for i in range(self.parameters):
+            X_active = X[:, active_set[:i]]  # to compute residual
+            x_jt = X[:, active_set[i]]
+            sign_t = signs[i]
+            F = (
+                np.identity(X.shape[0])
+                - X_active @ np.linalg.inv(X_active.T @ X_active) @ X_active.T
+            )
+            inactive_set.remove(active_set[i])
+
+            for j in inactive_set:
+                x_j = X[:, j]
+
+                left1 = (x_j - sign_t * x_jt).T @ F @ b
+                left2 = (-x_j - sign_t * x_jt).T @ F @ b
+                right1 = -(x_j - sign_t * x_jt).T @ F @ a
+                right2 = -(-x_j - sign_t * x_jt).T @ F @ a
+
+        for left, right in [(left1, right1), (left2, right2)]:
+            if np.around(left, 5) == 0:
+                if right <= 0:
+                    raise ValueError("l must be less than u")
+                continue
+            term = right / left
+            if left > 0:
+                u_list.append(term)
+            else:
+                l_list.append(term)
+
+        l = np.max(l_list)
+        u = np.min(u_list)
+        assert l < z < u
+
+        M = [M[i] for i in active_set]
+        return M, O, l, u
 
 
 class MarginalScreening(FeatureSelection):
