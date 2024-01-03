@@ -133,6 +133,10 @@ class PipelineStructure:
         X = X[:, self.M]
         Im = np.delete(np.eye(n), self.O, 0)
 
+        for node in self.static_order:
+            if isinstance(self.components[node], (FeatureSelection, OutlierDetection)):
+                self.components[node].reset_intervals()
+
         self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
         if test_index is not None:
             self.etas = [self.etas[test_index]]
@@ -296,6 +300,9 @@ class FeatureSelection:
     ) -> np.ndarray:
         raise NotImplementedError
 
+    def reset_intervals(self):
+        self.intervals = []
+
     def perform_si(
         self,
         a: np.ndarray,
@@ -304,8 +311,8 @@ class FeatureSelection:
         feature_matrix: np.ndarray,
         selected_features: list[int],
         detected_outliers: list[int],
-        # l: float,
-        # u: float,
+        l: float,
+        u: float,
     ) -> (list[int], list[int], float, float):
         raise NotImplementedError
 
@@ -341,6 +348,9 @@ class OutlierDetection:
     ) -> np.ndarray:
         raise NotImplementedError
 
+    def reset_intervals(self):
+        self.intervals = []
+
     def perform_si(
         self,
         a: np.ndarray,
@@ -349,8 +359,8 @@ class OutlierDetection:
         feature_matrix: np.ndarray,
         selected_features: list[int],
         detected_outliers: list[int],
-        # l: float,
-        # u: float,
+        l: float,
+        u: float,
     ) -> (list[int], list[int], float, float):
         raise NotImplementedError
 
@@ -435,15 +445,6 @@ class DeleteOutliers:
         pl_structure.update(self.name, self)
         return FeatureMatrix(pl_structure), ResponseVector(pl_structure)
 
-    # def delete_outliers(
-    #     self,
-    #     feature_matrix: np.ndarray,
-    #     response_vector: np.ndarray,
-    #     detected_outliers: np.ndarray
-    #     ) -> (np.ndarray, np.ndarray):
-    #     non_outliers = np.delete(np.arange(feature_matrix.shape[0]), detected_outliers)
-    #     return feature_matrix[non_outliers, :], response_vector[non_outliers]
-
 
 class ExtractFeatures:
     counter = 0
@@ -458,13 +459,6 @@ class ExtractFeatures:
         pl_structure = feature_matrix.pl_structure | selected_features.pl_structure
         pl_structure.update(self.name, self)
         return FeatureMatrix(pl_structure)
-
-    # def extract_features(
-    #     self,
-    #     feature_matrix: np.ndarray,
-    #     selected_features: np.ndarray
-    #     ) -> np.ndarray:
-    #     return feature_matrix[:, selected_features]
 
 
 class Union(IndexesOperator):
@@ -593,6 +587,19 @@ class StepwiseFeatureSelection(FeatureSelection):
             inactive_set.remove(inactive_set[ind])
         M = [M[i] for i in active_set]
         return M
+
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+    ) -> (list[int], list[int], float, float):
+        pass
 
 
 class MarginalScreening(FeatureSelection):
