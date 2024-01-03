@@ -133,20 +133,24 @@ class PipelineStructure:
         X = X[:, self.M]
         Im = np.delete(np.eye(n), self.O, 0)
 
-        for node in self.static_order:
-            if isinstance(self.components[node], (FeatureSelection, OutlierDetection)):
-                self.components[node].reset_intervals()
-
         self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
         if test_index is not None:
             self.etas = [self.etas[test_index]]
+
         self.calculators = []
         results = []
         for eta in self.etas:
+            for node in self.static_order:
+                if isinstance(
+                    self.components[node], (FeatureSelection, OutlierDetection)
+                ):
+                    self.components[node].reset_intervals()
+
             if len(np.array(self.cov).shape) == 0:
                 max_tail = 20 * np.sqrt(self.cov * eta @ eta)
             else:
                 max_tail = 20 * np.sqrt(eta @ self.cov @ eta)
+
             calculator = SelectiveInferenceNorm(self.y, self.cov, eta)
             result = calculator.inference(
                 self.algorithm,
@@ -156,6 +160,7 @@ class PipelineStructure:
             )
             results.append(result)
             self.calculators.append(calculator)
+
         if test_index is None:
             return self.M, results
         return self.M[test_index], results[0]
@@ -222,7 +227,9 @@ class PipelineStructure:
                 parants = list(self.graph[node])
                 assert len(parants) == 1
                 selected_features, detected_outliers, l, u = outputs[parants[0]]
-                return (selected_features, detected_outliers), [l, u]
+
+        if node == "end":
+            return (selected_features, detected_outliers), [l, u]
         raise ValueError("There is no end node")
 
     def model_selector(self, indexes):
