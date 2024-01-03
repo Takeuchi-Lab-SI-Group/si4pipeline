@@ -28,7 +28,7 @@ class MeanValueImputation(MissingImputation):
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
-        cov = np.identity(n)
+        cov = sigma**2 * np.identity(n)
         missing_index = np.where(np.isnan(response_vector))[0]
 
         # update covariance
@@ -85,15 +85,22 @@ class DefiniteRegressionImputation(MissingImputation):
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
-        cov = np.identity(n)
+        cov = sigma**2 * np.identity(n)
         missing_index = np.where(np.isnan(response_vector))[0]
 
-        # update covariance
-        # (y_1 + y_2 + ... + y_(n-num_outliers)) / (n - num_outliers)
-        each_var_cov_value = sigma**2 / (n - len(missing_index))
+        X = feature_matrix
+        X_delete = np.delete(X, missing_index, 0)
 
-        cov[:, missing_index] = each_var_cov_value
-        cov[missing_index, :] = each_var_cov_value
+        # update covariance
+        for index in missing_index:
+            X_missing = X[index]
+            factor = np.linalg.inv(X_delete.T @ X_delete) @ X_missing.T
+            for i in range(n):
+                each_x = X[i]
+                var_missing = sigma**2 * each_x @ factor
+                cov[i, index] = var_missing
+                cov[index, i] = var_missing
+
         return y_imputed, cov
 
 
