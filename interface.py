@@ -116,6 +116,7 @@ class PipelineStructure:
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
         sigma: float,
+        test_index=None,  # int from 0 to |self.M|-1
         **kwargs,
     ):
         self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
@@ -133,6 +134,8 @@ class PipelineStructure:
         Im = np.delete(np.eye(n), self.O, 0)
 
         self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
+        if test_index is not None:
+            self.etas = [self.etas[test_index]]
         self.calculators = []
         results = []
         for eta in self.etas:
