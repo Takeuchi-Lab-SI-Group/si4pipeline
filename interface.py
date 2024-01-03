@@ -578,7 +578,7 @@ class StepwiseFeatureSelection(FeatureSelection):
         # stepwise feature selection
         for _ in range(self.parameters):
             X_active = X[:, active_set]
-            r = y - X_active @ np.linalg.inv(X_active.T @ X_active) @ X_active.T @ y
+            r = y - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T @ y
             correlation = X[:, inactive_set].T @ r
 
             ind = np.argmax(np.abs(correlation))
@@ -603,7 +603,7 @@ class StepwiseFeatureSelection(FeatureSelection):
 
         X = np.delete(X, O, 0)
         X = X[:, M]
-        y = np.delete(y, O).reshape(-1, 1)
+        yz = np.delete(y, O).reshape(-1, 1)
 
         a, b = np.delete(a, O), np.delete(b, O)
 
@@ -613,7 +613,7 @@ class StepwiseFeatureSelection(FeatureSelection):
 
         for _ in range(self.parameters):
             X_active = X[:, active_set]
-            r = y - X_active @ np.linalg.inv(X_active.T @ X_active) @ X_active.T @ y
+            r = yz - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T @ yz
             correlation = X[:, inactive_set].T @ r
 
             ind = np.argmax(np.abs(correlation))
@@ -621,7 +621,8 @@ class StepwiseFeatureSelection(FeatureSelection):
             inactive_set.remove(inactive_set[ind])
             signs.append(np.sign(correlation[ind]))
 
-        l_list, u_list = [l], [u]
+        left_list = []
+        right_list = []
         inactive_set = list(range(X.shape[1]))
 
         for i in range(self.parameters):
@@ -630,7 +631,7 @@ class StepwiseFeatureSelection(FeatureSelection):
             sign_t = signs[i]
             F = (
                 np.identity(X.shape[0])
-                - X_active @ np.linalg.inv(X_active.T @ X_active) @ X_active.T
+                - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T
             )
             inactive_set.remove(active_set[i])
 
@@ -642,7 +643,13 @@ class StepwiseFeatureSelection(FeatureSelection):
                 right1 = -(x_j - sign_t * x_jt).T @ F @ a
                 right2 = -(-x_j - sign_t * x_jt).T @ F @ a
 
-        for left, right in [(left1, right1), (left2, right2)]:
+                left_list.append(left1)
+                left_list.append(left2)
+                right_list.append(right1)
+                right_list.append(right2)
+
+        l_list, u_list = [l], [u]
+        for left, right in zip(left_list, right_list):
             if np.around(left, 5) == 0:
                 if right <= 0:
                     raise ValueError("l must be less than u")
