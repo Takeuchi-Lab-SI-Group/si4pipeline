@@ -307,7 +307,7 @@ class FeatureSelection:
         raise NotImplementedError
 
     def reset_intervals(self):
-        self.intervals = []
+        self.intervals = dict()
 
     def perform_si(
         self,
@@ -605,6 +605,14 @@ class StepwiseFeatureSelection(FeatureSelection):
         l: float,
         u: float,
     ) -> (list[int], list[int], float, float):
+        if any(self.intervals):
+            for interval, indexes in self.intervals.items():
+                if interval[0] < z < interval[1]:
+                    M, O = indexes
+                    l = np.max([l, interval[0]])
+                    u = np.min([u, interval[1]])
+                    return M, O, l, u
+
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
 
@@ -633,7 +641,7 @@ class StepwiseFeatureSelection(FeatureSelection):
         inactive_set = list(range(X.shape[1]))
 
         for i in range(self.parameters):
-            X_active = X[:, active_set[:i]]  # to compute residual
+            X_active = X[:, active_set[:i]]
             x_jt = X[:, active_set[i]]
             sign_t = signs[i]
             F = (
@@ -669,9 +677,10 @@ class StepwiseFeatureSelection(FeatureSelection):
 
         l = np.max(l_list)
         u = np.min(u_list)
-        assert l < z < u
+        assert l < z < u, "l < z < u is not satisfied"
 
         M = [M[i] for i in active_set]
+        self.intervals[(l, u)] = (M, O)
         return M, O, l, u
 
 
@@ -701,6 +710,83 @@ class MarginalScreening(FeatureSelection):
         M = [M[i] for i in active_set]
         return M
 
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+    ) -> (list[int], list[int], float, float):
+        if any(self.intervals):
+            for interval, indexes in self.intervals.items():
+                if interval[0] < z < interval[1]:
+                    M, O = indexes
+                    l = np.max([l, interval[0]])
+                    u = np.min([u, interval[1]])
+                    return M, O, l, u
+
+        X, y = feature_matrix, a + b * z
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+        yz = np.delete(y, O).reshape(-1, 1)
+
+        a, b = np.delete(a, O), np.delete(b, O)
+
+        XTyz_abs = np.abs(X.T @ yz).flatten()
+        sort_XTyz_abs = np.argsort(XTyz_abs)[::-1]
+
+        active_set = sort_XTyz_abs[: self.parameters]
+        inactive_set = sort_XTyz_abs[self.parameters :]
+
+        left_list = []
+        right_list = []
+        for i in active_set:
+            x_i = X[:, i]
+            sign_i = np.sign(x_i.T @ yz)
+
+            e1 = sign_i * x_i.T @ a
+            e2 = sign_i * x_i.T @ b
+
+            for j in inactive_set:
+                x_j = X[:, j]
+
+                e3 = x_j.T @ a
+                e4 = x_j.T @ b
+
+                e5 = -x_j.T @ a
+                e6 = -x_j.T @ b
+
+                left_list.append(e4 - e2)
+                left_list.append(e6 - e2)
+                right_list.append(e1 - e3)
+                right_list.append(e1 - e5)
+
+        l_list, u_list = [l], [u]
+        for left, right in zip(left_list, right_list):
+            if np.around(left, 5) == 0:
+                if right <= 0:
+                    raise ValueError("l must be less than u")
+                continue
+            term = right / left
+            if left > 0:
+                u_list.append(term)
+            else:
+                l_list.append(term)
+
+        l = np.max(l_list)
+        u = np.min(u_list)
+        assert l < z < u, "l < z < u is not satisfied"
+
+        M = [M[i] for i in active_set]
+        self.intervals[(l, u)] = (M, O)
+        return M, O, l, u
+
 
 class Lasso(FeatureSelection):
     def __init__(self, name="lasso", parameters=None, candidates=None):
@@ -728,6 +814,96 @@ class Lasso(FeatureSelection):
         active_set = np.where(lasso.coef_ != 0)[0]
         M = [M[i] for i in active_set]
         return M
+
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+    ) -> (list[int], list[int], float, float):
+        if any(self.intervals):
+            for interval, indexes in self.intervals.items():
+                if interval[0] < z < interval[1]:
+                    M, O = indexes
+                    l = np.max([l, interval[0]])
+                    u = np.min([u, interval[1]])
+                    return M, O, l, u
+
+        X, y = feature_matrix, a + b * z
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+        yz = np.delete(y, O).reshape(-1, 1)
+
+        a, b = np.delete(a, O), np.delete(b, O)
+
+        lasso = lm.Lasso(
+            alpha=self.parameters, fit_intercept=False, max_iter=5000, tol=1e-10
+        )
+        lasso.fit(X, yz)
+        active_set = np.where(lasso.coef_ != 0)[0].tolist()
+        inactive_set = [i for i in range(X.shape[1]) if i not in active_set]
+        signs = np.sign(lasso.coef_[active_set])
+
+        X_active = X[:, active_set]
+        X_inactive = X[:, inactive_set]
+
+        X_active_plus = np.linalg.pinv(X_active.T @ X_active) @ X_active.T
+        Pm = X_active @ X_active_plus
+
+        A0_plus = (X_inactive.T @ (np.identity(X.shape[0]) - Pm)) / (
+            self.parameters * X.shape[0]
+        )
+        A0_minus = (-X_inactive.T @ (np.identity(X.shape[0]) - Pm)) / (
+            self.parameters * X.shape[0]
+        )
+        b0_plus = np.ones(X_inactive.shape[1]) - X_inactive.T @ X_active_plus.T @ signs
+        b0_minus = np.ones(X_inactive.shape[1]) + X_inactive.T @ X_active_plus.T @ signs
+
+        A1 = -np.diag(signs) @ X_active_plus
+        b1 = (
+            -self.parameters
+            * X.shape[0]
+            * np.diag(signs)
+            @ np.linalg.inv(X_active.T @ X_active)
+            @ signs
+        )
+
+        lasso_condition = [[A0_plus, b0_plus], [A0_minus, b0_minus], [A1, b1]]
+
+        left_list = []
+        right_list = []
+        for Aj, bj in lasso_condition:
+            left = (Aj @ b).reshape(-1).tolist()
+            right = (bj - Aj @ a).reshape(-1).tolist()
+            left_list += left
+            right_list += right
+
+        l_list, u_list = [l], [u]
+        for left, right in zip(left_list, right_list):
+            if np.around(left, 5) == 0:
+                if right <= 0:
+                    raise ValueError("l must be less than u")
+                continue
+            term = right / left
+            if left > 0:
+                u_list.append(term)
+            else:
+                l_list.append(term)
+
+        l = np.max(l_list)
+        u = np.min(u_list)
+        assert l < z < u, "l < z < u is not satisfied"
+
+        M = [M[i] for i in active_set]
+        self.intervals[(l, u)] = (M, O)
+        return M, O, l, u
 
 
 class ElasticNet(FeatureSelection):
