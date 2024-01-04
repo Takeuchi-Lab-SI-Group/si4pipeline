@@ -1,7 +1,55 @@
 import numpy as np
 import sklearn.linear_model as lm
-from source.base_component import OutlierDetection
 from sicore import polytope_to_interval
+from source.base_component import FeatureMatrix, ResponseVector, DetectedOutliers
+
+
+class OutlierDetection:
+    instance_counter = dict()
+
+    def __init__(
+        self,
+        name: str,
+        parameters,
+        candidates,
+    ):
+        self.parameters = parameters
+        self.candidates = candidates
+        OutlierDetection.instance_counter.setdefault(name, 0)
+        self.name = f"{name}_{OutlierDetection.instance_counter[name]}"
+        OutlierDetection.instance_counter[name] += 1
+
+    def __call__(
+        self, feature_matrix: FeatureMatrix, response_vector: ResponseVector
+    ) -> DetectedOutliers:
+        pl_structure = feature_matrix.pl_structure | response_vector.pl_structure
+        pl_structure.update(self.name, self)
+        return DetectedOutliers(pl_structure)
+
+    def detect_outliers(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+    ) -> np.ndarray:
+        raise NotImplementedError
+
+    def reset_intervals(self):
+        self.intervals = dict()
+
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+    ) -> (list[int], list[int], float, float):
+        raise NotImplementedError
 
 
 class CookDistance(OutlierDetection):

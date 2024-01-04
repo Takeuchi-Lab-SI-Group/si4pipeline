@@ -1,5 +1,34 @@
 import numpy as np
-from source.base_component import MissingImputation
+from source.base_component import FeatureMatrix, ResponseVector
+
+
+class MissingImputation:
+    instance_counter = dict()
+
+    def __init__(self, name: str):
+        MissingImputation.instance_counter.setdefault(name, 0)
+        self.name = f"{name}_{MissingImputation.instance_counter[name]}"
+        MissingImputation.instance_counter[name] += 1
+
+    def __call__(
+        self, feature_matrix: FeatureMatrix, response_vector: ResponseVector
+    ) -> ResponseVector:
+        pl_structure = feature_matrix.pl_structure | response_vector.pl_structure
+        pl_structure.update(self.name, self)
+        return ResponseVector(pl_structure)
+
+    def impute_missing(
+        self, feature_matrix: np.ndarray, response_vector: np.ndarray
+    ) -> np.ndarray:
+        raise NotImplementedError
+
+    def compute_covariance(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        sigma: float,
+    ) -> (np.ndarray, np.ndarray):
+        raise NotImplementedError
 
 
 class MeanValueImputation(MissingImputation):
