@@ -97,7 +97,7 @@ class PipelineStructure:
                     detected_outliers = process(*detected_outliers_list)
                 outputs[node] = (selected_features, detected_outliers)
 
-            elif isinstance(self.components[node], (DeleteOutliers, ExtractFeatures)):
+            elif isinstance(self.components[node], (RemoveOutliers, ExtractFeatures)):
                 parents = list(self.graph[node])
                 assert len(parents) == 1
                 selected_features, detected_outliers = outputs[parents[0]]
@@ -188,7 +188,7 @@ class PipelineStructure:
 
             elif isinstance(
                 self.components[node],
-                (MissingImputation, DeleteOutliers, ExtractFeatures),
+                (MissingImputation, RemoveOutliers, ExtractFeatures),
             ):
                 parants = list(self.graph[node])
                 assert len(parants) == 1
@@ -437,12 +437,12 @@ class IndexesOperator:
             raise TypeError("Inputs must be SelectedFeatures or DetectedOutliers")
 
 
-class DeleteOutliers:
+class RemoveOutliers:
     counter = 0
 
-    def __init__(self, name="delete"):
-        self.name = f"{name}_{DeleteOutliers.counter}"
-        DeleteOutliers.counter += 1
+    def __init__(self, name="remove"):
+        self.name = f"{name}_{RemoveOutliers.counter}"
+        RemoveOutliers.counter += 1
 
     def __call__(
         self,
@@ -516,8 +516,8 @@ def intersection(*inputs):
     return Intersection()(*inputs)
 
 
-def delete_outliers(feature_matrix, response_vector, detected_outliers):
-    return DeleteOutliers()(feature_matrix, response_vector, detected_outliers)
+def remove_outliers(feature_matrix, response_vector, detected_outliers):
+    return RemoveOutliers()(feature_matrix, response_vector, detected_outliers)
 
 
 def extract_features(feature_matrix, selected_features):
