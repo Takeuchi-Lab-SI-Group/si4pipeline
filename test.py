@@ -11,11 +11,10 @@ from source.feature_selection import (
     lasso,
     marginal_screening,
 )
-from scipy.stats import norm
 from tqdm import tqdm
-from sicore import pvalues_qqplot
-from scipy.stats import kstest
 from concurrent.futures import ProcessPoolExecutor
+import argparse
+import pickle
 
 
 def option1():
@@ -50,24 +49,9 @@ def option2():
     return make_pipeline(output=M)
 
 
-def option3():
-    X, y = make_dataset()
-    y = definite_regression_imputation(X, y)
-
-    # O = cook_distance(X, y, 3.0)
-    # X, y = remove_outliers(X, y, O)
-
-    M = marginal_screening(X, y, 5)
-    X = extract_features(X, M)
-
-    M1 = stepwise_feature_selection(X, y, 3)
-    M2 = lasso(X, y, 0.08)
-    M = intersection(M1, M2)
-    return make_pipeline(output=M)
-
-
 class PararellExperiment:
-    def __init__(self, num_worker=40, num_iter=2000):
+    def __init__(self, seed, num_worker=32, num_iter=1000):
+        self.seed = seed
         self.num_worker = num_worker
         self.num_iter = num_iter
 
@@ -93,40 +77,43 @@ class PararellExperiment:
         # to change
         pipeline = option1()
         n, p = 100, 10
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(self.seed)
 
         dataset = []
         for _ in range(self.num_iter * 2):
             X = rng.normal(size=(n, p))
             y = rng.normal(size=(n,))
-            y[:5] += 4
+            # y[:5] += 4
             missing = rng.choice(list(range(n)), size=n // 10, replace=False)
             y[missing] = np.nan
             M, _ = pipeline(X, y)
             if len(M) > 0:
-                index = rng.integers(0, len(M))
-                dataset.append((X, y, index))
+                test_index = rng.choice(len(M))
+                dataset.append((X, y, test_index))
                 if len(dataset) == self.num_iter:
                     break
 
         results = self.experiment(dataset)
+        return results
 
-        p_list = np.array([result.p_value for result in results])
-        naive_p_list = np.array(
-            [2 * norm.cdf(-np.abs(result.stat)) for result in results]
-        )
+        # print(f"parametric: {np.mean(p_list < 0.05):.3f}")
+        # print(f"naive: {np.mean(naive_p_list < 0.05):.3f}")
 
-        print(f"parametric: {np.mean(p_list < 0.05):.3f}")
-        print(f"naive: {np.mean(naive_p_list < 0.05):.3f}")
+        # pvalues_qqplot(p_list, fname="qqplot.pdf")
+        # print(f'KS: {kstest(p_list, "uniform")[1]:.3f}')
 
-        pvalues_qqplot(p_list, fname="qqplot.pdf")
-        print(f'KS: {kstest(p_list, "uniform")[1]:.3f}')
-
-        print(
-            f"search count: {np.mean([result.search_count for result in results]):.2f}"
-        )
+        # print(
+        #     f"search count: {np.mean([result.search_count for result in results]):.2f}"
+        # )
 
 
 if __name__ == "__main__":
-    experiment = PararellExperiment()
-    experiment.run_experiment()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+
+    experiment = PararellExperiment(args.seed)
+    results = experiment.run_experiment()
+
+    with open(f"result/result{args.seed}.pkl", "wb") as f:
+        pickle.dump(results, f)
