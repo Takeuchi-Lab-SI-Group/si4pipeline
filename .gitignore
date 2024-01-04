@@ -1,2 +1,6 @@
 __pycache__
 qqplot.pdf
+path_for_stdoutfile
+path_for_errorfile
+result.txt
+result

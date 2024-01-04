@@ -160,9 +160,10 @@ class PipelineStructure:
             self.reset_intervals()
 
             if len(np.array(self.cov).shape) == 0:
-                max_tail = 20 * np.sqrt(self.cov * eta @ eta)
+                stat_sigma = np.sqrt(self.cov * eta @ eta)
             else:
-                max_tail = 20 * np.sqrt(eta @ self.cov @ eta)
+                stat_sigma = np.sqrt(eta @ self.cov @ eta)
+            max_tail = 20 * stat_sigma
 
             calculator = SelectiveInferenceNorm(self.y, self.cov, eta)
             result = calculator.inference(
@@ -175,7 +176,7 @@ class PipelineStructure:
             self.calculators.append(calculator)
 
         if test_index is None:
-            return self.M, results
+            return self.M, [result.p_value for result in results]
         return self.M[test_index], results[0]
 
     def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
