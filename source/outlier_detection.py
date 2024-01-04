@@ -112,8 +112,9 @@ class CookDistance(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
+        is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals):
+        if any(self.intervals) and is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
@@ -245,8 +246,9 @@ class Dffits(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
+        is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals):
+        if any(self.intervals) and is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
@@ -372,8 +374,9 @@ class SoftIpod(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
+        is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals):
+        if any(self.intervals) and is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
