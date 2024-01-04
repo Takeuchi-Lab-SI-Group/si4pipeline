@@ -38,7 +38,7 @@ class MeanValueImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        _, y = feature_matrix, response_vector
+        _, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
@@ -76,7 +76,7 @@ class EuclideanImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector
+        X, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
@@ -138,7 +138,7 @@ class ManhattanImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector
+        X, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
@@ -198,7 +198,7 @@ class ChebyshevImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector
+        X, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
@@ -258,7 +258,7 @@ class DefiniteRegressionImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector
+        X, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
@@ -307,7 +307,7 @@ class ProbabilisticRegressionImputation(MissingImputation):
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector
+        X, y = feature_matrix, response_vector.copy()
 
         # location of missing value
         missing_index = np.where(np.isnan(y))[0]
