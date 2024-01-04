@@ -499,7 +499,7 @@ class Intersection(IndexesOperator):
             temp_set = set(inputs[0])
             for input in inputs[1:]:
                 temp_set = temp_set & set(input)
-            return np.array(list(temp_set))
+            return list(temp_set)
 
 
 def make_dataset():
