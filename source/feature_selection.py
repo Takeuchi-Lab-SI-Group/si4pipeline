@@ -100,7 +100,7 @@ class StepwiseFeatureSelection(FeatureSelection):
         u: float,
         is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals) and is_cv:
+        if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
@@ -217,7 +217,7 @@ class MarginalScreening(FeatureSelection):
         u: float,
         is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals) and is_cv:
+        if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
@@ -323,7 +323,7 @@ class Lasso(FeatureSelection):
         u: float,
         is_cv=False,
     ) -> (list[int], list[int], float, float):
-        if any(self.intervals) and is_cv:
+        if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
                     M, O = indexes
