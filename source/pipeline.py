@@ -134,6 +134,7 @@ class PipelineStructure:
         response_vector: np.ndarray,
         sigma: float,
         test_index=None,  # int from 0 to |self.M|-1
+        is_result=False,
         **kwargs,
     ):
         self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
@@ -176,7 +177,10 @@ class PipelineStructure:
             self.calculators.append(calculator)
 
         if test_index is None:
-            return self.M, [result.p_value for result in results]
+            if is_result:
+                return self.M, results
+            else:
+                return self.M, [result.p_value for result in results]
         return self.M[test_index], results[0]
 
     def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
