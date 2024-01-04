@@ -2,7 +2,7 @@ from source.base_component import (
     make_dataset,
     union,
     intersection,
-    delete_outliers,
+    remove_outliers,
     extract_features,
     make_pipeline,
 )
