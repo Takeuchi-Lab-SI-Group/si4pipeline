@@ -91,7 +91,7 @@ if __name__ == "__main__":
     results = experiment.run_experiment()
 
     dir_name = f"results_op{args.option}"
-    file_name = f"seed{args.seed}_n{args.n}p{args.p}beta{args.beta:.1f}.pkl"
+    file_name = f"n{args.n}p{args.p}beta{args.beta:.1f}_seed{args.seed}.pkl"
 
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)

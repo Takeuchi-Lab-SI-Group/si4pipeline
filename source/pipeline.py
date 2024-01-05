@@ -139,6 +139,9 @@ class PipelineStructure:
         is_result=False,
         **kwargs,
     ):
+        if "step" not in kwargs:
+            kwargs["step"] = 1e-6
+
         self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
         self.M, self.O = self(feature_matrix, response_vector)
 
