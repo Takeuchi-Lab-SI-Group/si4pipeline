@@ -13,6 +13,7 @@ from source.missing_imputation import MissingImputation
 from source.outlier_detection import OutlierDetection
 from source.feature_selection import FeatureSelection
 from graphlib import TopologicalSorter
+from itertools import product
 from sicore import SelectiveInferenceNorm
 
 
@@ -22,6 +23,7 @@ class PipelineStructure:
         self.edges = set()
         self.components = {"start": None}
         self.current_node = "start"
+        self.tuned = False
 
     def update(self, node, component):
         self.add_node(node, component)
@@ -246,13 +248,19 @@ class PipelineStructure:
                 assert len(parants) == 1
                 selected_features, detected_outliers, l, u = outputs[parants[0]]
 
-        if node == "end":
+        if node != "end":
+            raise ValueError("There is no end node")
+        if not self.tuned:
             return (selected_features, detected_outliers), [l, u]
-        raise ValueError("There is no end node")
+        else:
+            pass
 
     def model_selector(self, indexes):
-        M, O = indexes
-        return (set(M) == set(self.M)) and (set(O) == set(self.O))
+        if not self.tuned:
+            M, O = indexes
+            return (set(M) == set(self.M)) and (set(O) == set(self.O))
+        else:
+            pass
 
     def __or__(self, other):
         if isinstance(other, PipelineStructure):
@@ -276,6 +284,182 @@ class PipelineStructure:
                     edge_list.append(f"{edge[0]} -> {edge[1]}")
         return "\n".join(edge_list)
 
+    def tune(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        n_iter=10,
+        cv=5,
+        random_state=None,
+    ):
+        X, y = feature_matrix, response_vector
+        n = response_vector.shape[0]
+
+        self.cv = cv
+        self.n_iter = n_iter
+        self.rng = np.random.default_rng(random_state)
+
+        self.make_candidates()
+        self.cv_masks = np.array_split(self.rng.permutation(n), self.cv)
+
+        mse_at_each_candidate = []
+        for candidate in self.candidates:
+            mse_list = []
+            for mask in self.cv_masks:
+                self.reset_intervals()
+                self.set_parameters(candidate)
+
+                X_tr, y_tr = X[mask], y[mask]
+                X_val, y_val = np.delete(X, mask, 0), np.delete(y, mask)
+                M, _ = self(X_tr, y_tr)
+                if len(M) == 0:
+                    mse_list.append(np.inf)
+                else:
+                    y_error = (
+                        y_val
+                        - X_val[:, M]
+                        @ np.linalg.inv(X_tr[:, M].T @ X_tr[:, M])
+                        @ X_tr[:, M].T
+                        @ y_tr
+                    )
+                    mse_list.append(np.mean(y_error**2))
+            mse_at_each_candidate.append(np.mean(mse_list))
+
+        best_index = np.argmin(mse_at_each_candidate)
+        self.best_mse = mse_at_each_candidate[best_index]
+        self.best_candidate = self.candidates[best_index]
+        self.set_parameters(self.best_candidate)
+        self.tuned = True
+
+        # print(self.candidates)
+        # print(mse_at_each_candidate)
+
+    def make_candidates(self):
+        self.candidates = []
+
+        rolled_candidates = self.rollout_candidates()
+        if not any(rolled_candidates):
+            if self.n_iter == 1:
+                self.candidates = [dict()]
+                return None
+            else:
+                raise ValueError(
+                    "There is no candidates. Please set candidates when define the pipiline."
+                )
+
+        finite_keys, finite_candidates = [], []
+        dist_keys, dist_candidates = [], []
+        for node in rolled_candidates.keys():
+            candidates = rolled_candidates[node]
+            if isinstance(candidates, (list, set, tuple)):
+                finite_keys.append(node)
+                finite_candidates.append(candidates)
+            elif hasattr(candidates, "rvs"):
+                dist_keys.append(node)
+                dist_candidates.append(candidates)
+            else:
+                raise TypeError(
+                    "Candidates must be list, set, tuple or has rvs method."
+                )
+
+        finite_candidates_grids = list(product(*finite_candidates))
+        num_grids = len(finite_candidates_grids)
+
+        # finite_dict = dict(zip(finite_keys, finite_candidates))
+        dist_dict = dict(zip(dist_keys, dist_candidates))
+        if num_grids < self.n_iter and len(dist_dict) == 0:
+            raise ValueError("The number of candidates must be larger than n_iter.")
+        elif num_grids >= self.n_iter and len(dist_dict) == 0:
+            indexes = self.rng.choice(num_grids, size=self.n_iter, replace=False)
+            for index in indexes:
+                self.candidates.append(
+                    dict(zip(finite_keys, finite_candidates_grids[index]))
+                )
+        else:
+            for _ in range(self.n_iter):
+                i = self.rng.choice(num_grids)
+                temp_dict = dict(zip(finite_keys, finite_candidates_grids[i]))
+                for key, dist in dist_dict.items():
+                    temp_dict[key] = dist.rvs()
+                self.candidates.append(temp_dict)
+
+    def rollout_candidates(self):
+        candidates_dict = dict()
+        for node in self.static_order:
+            if isinstance(self.components[node], (FeatureSelection, OutlierDetection)):
+                candidates = self.components[node].candidates
+                if candidates is not None:
+                    candidates_dict[node] = candidates
+        return candidates_dict
+
+    def set_parameters(self, candidates):
+        for node, parameters in candidates.items():
+            self.components[node].parameters = parameters
+
+
+class MultiPipelineStructure:
+    def __init__(self, *pipelines):
+        self.pipelines = pipelines
+        self.tuned = False
+
+    def __call__(self, feature_matrix: np.ndarray, response_vector: np.ndarray):
+        if self.tuned:
+            return self.pipelines[self.best_index](feature_matrix, response_vector)
+        else:
+            outputs = []
+            for pipeline in self.pipelines:
+                outputs.append(pipeline(feature_matrix, response_vector))
+            return outputs
+
+    def inference(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        sigma: float,
+        test_index=None,  # int from 0 to |self.M|-1
+        is_result=False,
+        **kwargs,
+    ):
+        if self.tuned:
+            return self.pipelines[self.best_index].inference(
+                feature_matrix, response_vector, sigma, test_index, is_result, **kwargs
+            )
+        else:
+            raise ValueError("Please tune the pipelines before inference.")
+
+    def tune(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        n_iters=10,
+        cv=5,
+        random_state=None,
+    ):
+        if isinstance(n_iters, int):
+            n_iters = [n_iters] * len(self.pipelines)
+        elif isinstance(n_iters, (list, tuple)):
+            assert len(n_iters) == len(self.pipelines)
+
+        for pipeline, n_iter in zip(self.pipelines, n_iters):
+            pipeline.tune(feature_matrix, response_vector, n_iter, cv, random_state)
+        self.best_index = np.argmin([pipeline.best_mse for pipeline in self.pipelines])
+        self.tuned = True
+
+    def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
+        pass
+
+    def model_selector(self, indexes_pipelines):
+        M, O, index, candidate = indexes_pipelines
+        return (
+            set(M) == set(self.M)
+            and set(O) == set(self.O)
+            and self.best_index == index
+            and self.pipelines[self.best_index].best_candidate == candidate
+        )
+
+    def __str__(self):
+        return "\n\n".join([str(pipeline) for pipeline in self.pipelines])
+
 
 def make_dataset():
     feature_matrix = FeatureMatrix(PipelineStructure())
@@ -288,3 +472,7 @@ def make_pipeline(output: SelectedFeatures):
     pl_structure.update("end", None)
     pl_structure.make_graph()
     return pl_structure
+
+
+def make_pipelines(*pipelines: list[PipelineStructure]):
+    return MultiPipelineStructure(*pipelines)
