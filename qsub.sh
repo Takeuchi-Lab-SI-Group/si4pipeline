@@ -3,7 +3,7 @@
 #$ -V -S /bin/bash
 #$ -N cpu_e
 #$ -q cpu-e.q@*
-#$ -pe smp 32
+#$ -pe smp 16
 #$ -o path_for_stdoutfile
 #$ -e path_for_errorfile
 # export OMP_NUM_THREADS = 1
