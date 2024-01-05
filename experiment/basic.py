@@ -51,7 +51,7 @@ class PararellExperiment:
         rng = np.random.default_rng(self.seed)
 
         dataset = []
-        for _ in range(self.num_iter * 2):
+        for _ in range(self.num_iter * 10):
             X = rng.normal(size=(n, p))
             y = X @ beta + rng.normal(size=(n,))
             # y[:5] += 4
