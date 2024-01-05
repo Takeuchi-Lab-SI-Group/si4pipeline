@@ -4,3 +4,5 @@ path_for_stdoutfile
 path_for_errorfile
 result.txt
 result*
+temp.sh
+temp
