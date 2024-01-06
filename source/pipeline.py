@@ -15,6 +15,7 @@ from source.feature_selection import FeatureSelection
 from graphlib import TopologicalSorter
 from itertools import product
 from sicore import SelectiveInferenceNorm
+from sicore.intervals import poly_lt_zero
 
 
 class PipelineStructure:
@@ -129,6 +130,7 @@ class PipelineStructure:
         for node in self.static_order:
             if isinstance(self.components[node], (FeatureSelection, OutlierDetection)):
                 self.components[node].reset_intervals()
+        self.cv_quadratic = dict()
 
     def inference(
         self,
@@ -253,17 +255,205 @@ class PipelineStructure:
 
         if node != "end":
             raise ValueError("There is no end node")
+
         if not self.tuned:
             return (selected_features, detected_outliers), [l, u]
-        else:
-            pass
+
+        old_mse = np.inf
+        quadratic_at_each_candidate = dict()
+        l_list, u_list = [l], [u]
+        for candidate_id in range(self.n_iter):
+            candidate = self.candidates[candidate_id]
+            self.cv_quadratic.setdefault(candidate_id, dict())
+            quadratic_list = []
+            for mask_id in range(self.cv):
+                mask = self.cv_masks[mask_id]
+                self.cv_quadratic[candidate_id].setdefault(mask_id, dict())
+
+                self.set_parameters(candidate)
+
+                flag = False
+                for interval in self.cv_quadratic[candidate_id][mask_id].keys():
+                    if interval[0] < z < interval[1]:
+                        l_list.append(interval[0])
+                        u_list.append(interval[1])
+                        quadratic_list.append(
+                            self.cv_quadratic[candidate_id][mask_id][interval]
+                        )
+                        flag = True
+                if flag:
+                    # print("called")
+                    continue
+
+                X_tr, a_tr, b_tr = feature_matrix[mask], a[mask], b[mask]
+                (
+                    selected_features_cv,
+                    detected_outliers_cv,
+                    l_cv,
+                    u_cv,
+                ) = self.cv_selection_event(X_tr, a_tr, b_tr, z)
+                l_list.append(l_cv)
+                u_list.append(u_cv)
+                # print(candidate, mask_id)
+                # print(selected_features_cv)
+
+                X_tr = np.delete(X_tr, detected_outliers_cv, 0)
+                a_tr = np.delete(a_tr, detected_outliers_cv)
+                b_tr = np.delete(b_tr, detected_outliers_cv)
+                X_val = np.delete(feature_matrix, mask, 0)
+                a_val = np.delete(a, mask)
+                b_val = np.delete(b, mask)
+                num = X_val.shape[0]
+
+                if len(selected_features_cv) == 0:
+                    quadratic = [
+                        b_val @ b_val / num,
+                        2 * b_val @ a_val / num,
+                        a_val @ a_val / num,
+                    ]
+                else:
+                    F = (
+                        X_tr[:, selected_features_cv]
+                        @ np.linalg.inv(
+                            X_tr[:, selected_features_cv].T
+                            @ X_tr[:, selected_features_cv]
+                        )
+                        @ X_val[:, selected_features_cv].T
+                    )
+                    G = F @ F.T
+                    alpha = b_val @ b_val - 2 * b_tr @ F @ b_val + b_tr @ G @ b_tr
+                    beta = (
+                        2 * b_val @ a_val
+                        - 2 * b_tr @ F @ a_val
+                        - 2 * a_tr @ F @ b_val
+                        + 2 * a_tr @ G @ b_tr
+                    )
+                    gamma = a_val @ a_val - 2 * a_tr @ F @ a_val + a_tr @ G @ a_tr
+                    quadratic = [alpha / num, beta / num, gamma / num]
+                self.cv_quadratic[candidate_id][mask_id][(l_cv, u_cv)] = quadratic
+                quadratic_list.append(quadratic)
+
+            quadratic_at_each_candidate[candidate_id] = np.mean(quadratic_list, axis=0)
+            alpha, beta, gamma = quadratic_at_each_candidate[candidate_id]
+            mse = alpha * z**2 + beta * z + gamma
+            # print(mse, candidate)
+            if mse < old_mse:
+                old_mse = mse
+                selected_candidate = candidate
+                selected_quadratic = (alpha, beta, gamma)
+            selected_quadratic = np.array(selected_quadratic)
+
+        for candidate in self.candidates:
+            if candidate == selected_candidate:
+                continue
+            intervals = poly_lt_zero(
+                selected_quadratic - quadratic_at_each_candidate[candidate_id]
+            )
+            for interval in intervals:
+                if interval[0] < z < interval[1]:
+                    l_list.append(interval[0])
+                    u_list.append(interval[1])
+
+        # print(selected_candidate, old_mse)
+        self.set_parameters(self.best_candidate)
+        return (selected_features, detected_outliers, selected_candidate), [
+            np.max(l_list),
+            np.min(u_list),
+        ]
+
+    def cv_selection_event(
+        self,
+        X: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+    ):
+        outputs = dict()
+        feature_matrix = X
+
+        for node in self.static_order:
+            if node == "start":
+                selected_features = list(range(feature_matrix.shape[1]))
+                detected_outliers = []
+                outputs[node] = (selected_features, detected_outliers, -np.inf, np.inf)
+
+            elif isinstance(
+                self.components[node], (FeatureSelection, OutlierDetection)
+            ):
+                layer = self.components[node]
+                parants = list(self.graph[node])
+                assert len(parants) == 1
+                selected_features, detected_outliers, l, u = outputs[parants[0]]
+                selected_features, detected_outliers, l, u = layer.perform_si(
+                    a,
+                    b,
+                    z,
+                    feature_matrix,
+                    selected_features,
+                    detected_outliers,
+                    l,
+                    u,
+                    True,
+                )
+                outputs[node] = (selected_features, detected_outliers, l, u)
+
+            elif isinstance(
+                self.components[node],
+                (MissingImputation, RemoveOutliers, ExtractFeatures),
+            ):
+                parants = list(self.graph[node])
+                assert len(parants) == 1
+                selected_features, detected_outliers, l, u = outputs[parants[0]]
+                outputs[node] = (selected_features, detected_outliers, l, u)
+
+            elif isinstance(self.components[node], IndexesOperator):
+                layer = self.components[node]
+                parants = list(self.graph[node])
+                selected_features_list = []
+                detected_outliers_list = []
+                l_list, u_list = [], []
+                for parant in parants:
+                    selected_features, detected_outliers, l, u = outputs[parant]
+                    selected_features_list.append(selected_features)
+                    detected_outliers_list.append(detected_outliers)
+                    l_list.append(l)
+                    u_list.append(u)
+                if isinstance(layer, Union):
+                    process = layer.union
+                elif isinstance(layer, Intersection):
+                    process = layer.intersection
+                else:
+                    raise TypeError("Input must be Union or Intersection")
+                if layer.mode == "selected_features":
+                    selected_features = process(*selected_features_list)
+                    detected_outliers = detected_outliers_list[0]
+                elif layer.mode == "detected_outliers":
+                    selected_features = selected_features_list[0]
+                    detected_outliers = process(*detected_outliers_list)
+                l, u = np.max(l_list), np.min(u_list)
+                outputs[node] = (selected_features, detected_outliers, l, u)
+
+            elif node == "end":
+                parants = list(self.graph[node])
+                assert len(parants) == 1
+                selected_features, detected_outliers, l, u = outputs[parants[0]]
+
+        if node != "end":
+            raise ValueError("There is no end node")
+
+        return selected_features, detected_outliers, l, u
 
     def model_selector(self, indexes):
         if not self.tuned:
             M, O = indexes
             return (set(M) == set(self.M)) and (set(O) == set(self.O))
         else:
-            pass
+            M, O, candidate = indexes
+            return (
+                set(M) == set(self.M)
+                and set(O) == set(self.O)
+                and candidate == self.best_candidate
+            )
 
     def __or__(self, other):
         if isinstance(other, PipelineStructure):
@@ -296,6 +486,10 @@ class PipelineStructure:
         random_state=None,
     ):
         X, y = feature_matrix, response_vector
+        node = self.static_order[1]
+        if isinstance(self.components[node], MissingImputation):
+            y = self.components[node].impute_missing(feature_matrix, response_vector)
+
         n = response_vector.shape[0]
 
         self.cv = cv
@@ -309,14 +503,14 @@ class PipelineStructure:
         for candidate in self.candidates:
             mse_list = []
             for mask in self.cv_masks:
-                self.reset_intervals()
                 self.set_parameters(candidate)
 
                 X_tr, y_tr = X[mask], y[mask]
                 X_val, y_val = np.delete(X, mask, 0), np.delete(y, mask)
-                M, _ = self(X_tr, y_tr)
+                M, O = self(X_tr, y_tr)
+                X_tr, y_tr = np.delete(X_tr, O, 0), np.delete(y_tr, O)
                 if len(M) == 0:
-                    mse_list.append(np.inf)
+                    mse_list.append(np.mean(y_val**2))
                 else:
                     y_error = (
                         y_val
@@ -328,14 +522,12 @@ class PipelineStructure:
                     mse_list.append(np.mean(y_error**2))
             mse_at_each_candidate.append(np.mean(mse_list))
 
+        # print(mse_at_each_candidate)
         best_index = np.argmin(mse_at_each_candidate)
         self.best_mse = mse_at_each_candidate[best_index]
         self.best_candidate = self.candidates[best_index]
         self.set_parameters(self.best_candidate)
         self.tuned = True
-
-        # print(self.candidates)
-        # print(mse_at_each_candidate)
 
     def make_candidates(self):
         self.candidates = []
