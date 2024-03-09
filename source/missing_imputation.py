@@ -27,7 +27,7 @@ class MissingImputation:
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
         sigma: float,
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         raise NotImplementedError
 
 
@@ -53,7 +53,7 @@ class MeanValueImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
@@ -100,7 +100,7 @@ class EuclideanImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
@@ -162,7 +162,7 @@ class ManhattanImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
@@ -222,7 +222,7 @@ class ChebyshevImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
@@ -277,7 +277,7 @@ class DefiniteRegressionImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]
@@ -328,7 +328,7 @@ class ProbabilisticRegressionImputation(MissingImputation):
 
     def compute_covariance(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> (np.ndarray, np.ndarray):
+    ) -> tuple[np.ndarray, np.ndarray]:
         y_imputed = self.impute_missing(feature_matrix, response_vector)
 
         n = response_vector.shape[0]

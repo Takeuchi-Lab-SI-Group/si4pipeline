@@ -36,6 +36,7 @@ class FeatureSelection:
 
     def reset_intervals(self):
         self.intervals = dict()
+        self.cv_intervals = dict()
 
     def perform_si(
         self,
@@ -48,7 +49,7 @@ class FeatureSelection:
         l: float,
         u: float,
         is_cv=False,
-    ) -> (list[int], list[int], float, float):
+    ) -> tuple[list[int], list[int], float, float]:
         raise NotImplementedError
 
 
@@ -99,7 +100,7 @@ class StepwiseFeatureSelection(FeatureSelection):
         l: float,
         u: float,
         is_cv=False,
-    ) -> (list[int], list[int], float, float):
+    ) -> tuple[list[int], list[int], float, float]:  # type: ignore
         if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
@@ -175,7 +176,8 @@ class StepwiseFeatureSelection(FeatureSelection):
         assert l < z < u, "l < z < u is not satisfied"
 
         M = [M[i] for i in active_set]
-        self.intervals[(l, u)] = (M, O)
+        if not is_cv:
+            self.intervals[(l, u)] = (M, O)
         return M, O, l, u
 
 
@@ -216,7 +218,7 @@ class MarginalScreening(FeatureSelection):
         l: float,
         u: float,
         is_cv=False,
-    ) -> (list[int], list[int], float, float):
+    ) -> tuple[list[int], list[int], float, float]:
         if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:
@@ -322,7 +324,7 @@ class Lasso(FeatureSelection):
         l: float,
         u: float,
         is_cv=False,
-    ) -> (list[int], list[int], float, float):
+    ) -> tuple[list[int], list[int], float, float]:
         if any(self.intervals) and not is_cv:
             for interval, indexes in self.intervals.items():
                 if interval[0] < z < interval[1]:

@@ -64,7 +64,7 @@ class RemoveOutliers:
         feature_matrix: FeatureMatrix,
         response_vector: ResponseVector,
         detected_outliers: DetectedOutliers,
-    ) -> (FeatureMatrix, ResponseVector):
+    ) -> tuple[FeatureMatrix, ResponseVector]:
         pl_structure = (
             feature_matrix.pl_structure
             | response_vector.pl_structure

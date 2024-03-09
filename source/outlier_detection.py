@@ -37,6 +37,7 @@ class OutlierDetection:
 
     def reset_intervals(self):
         self.intervals = dict()
+        self.cv_intervals = dict()
 
     def perform_si(
         self,
