@@ -36,7 +36,48 @@ class FeatureSelection:
 
     def reset_intervals(self):
         self.intervals = dict()
-        self.cv_intervals = dict()
+
+    def load_intervals(
+        self,
+        z: float,
+        l: float,
+        u: float,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
+    ):
+        if candidate_id is None and mask_id is None:
+            self.intervals.setdefault(None, dict())
+            items = self.intervals[None].items()
+        elif candidate_id is not None and mask_id is not None:
+            self.intervals.setdefault(candidate_id, dict())
+            self.intervals[candidate_id].setdefault(mask_id, dict())
+            items = self.intervals[candidate_id][mask_id].items()
+        else:
+            raise ValueError("candidate_id and mask_id must be both None or not None")
+
+        for interval, indexes in items:
+            if interval[0] < z < interval[1]:
+                M, O = indexes
+                l = np.max([l, interval[0]])
+                u = np.min([u, interval[1]])
+                return M, O, l, u
+        return None
+
+    def save_intervals(
+        self,
+        l: float,
+        u: float,
+        M: list[int],
+        O: list[int],
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
+    ):
+        if candidate_id is None and mask_id is None:
+            self.intervals[None][(l, u)] = (M, O)
+        elif candidate_id is not None and mask_id is not None:
+            self.intervals[candidate_id][mask_id][(l, u)] = (M, O)
+        else:
+            raise ValueError("candidate_id and mask_id must be both None or not None")
 
     def perform_si(
         self,
@@ -48,7 +89,8 @@ class FeatureSelection:
         detected_outliers: list[int],
         l: float,
         u: float,
-        is_cv=False,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
     ) -> tuple[list[int], list[int], float, float]:
         raise NotImplementedError
 
@@ -99,15 +141,12 @@ class StepwiseFeatureSelection(FeatureSelection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        is_cv=False,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
     ) -> tuple[list[int], list[int], float, float]:  # type: ignore
-        if any(self.intervals) and not is_cv:
-            for interval, indexes in self.intervals.items():
-                if interval[0] < z < interval[1]:
-                    M, O = indexes
-                    l = np.max([l, interval[0]])
-                    u = np.min([u, interval[1]])
-                    return M, O, l, u
+        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        if results is not None:
+            return results
 
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
@@ -176,8 +215,8 @@ class StepwiseFeatureSelection(FeatureSelection):
         assert l < z < u, "l < z < u is not satisfied"
 
         M = [M[i] for i in active_set]
-        if not is_cv:
-            self.intervals[(l, u)] = (M, O)
+
+        self.save_intervals(l, u, M, O, candidate_id, mask_id)
         return M, O, l, u
 
 
