@@ -256,15 +256,12 @@ class MarginalScreening(FeatureSelection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        is_cv=False,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
     ) -> tuple[list[int], list[int], float, float]:
-        if any(self.intervals) and not is_cv:
-            for interval, indexes in self.intervals.items():
-                if interval[0] < z < interval[1]:
-                    M, O = indexes
-                    l = np.max([l, interval[0]])
-                    u = np.min([u, interval[1]])
-                    return M, O, l, u
+        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        if results is not None:
+            return results
 
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
@@ -321,7 +318,8 @@ class MarginalScreening(FeatureSelection):
         assert l < z < u, "l < z < u is not satisfied"
 
         M = [M[i] for i in active_set]
-        self.intervals[(l, u)] = (M, O)
+
+        self.save_intervals(l, u, M, O, candidate_id, mask_id)
         return M, O, l, u
 
 
@@ -362,15 +360,12 @@ class Lasso(FeatureSelection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        is_cv=False,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
     ) -> tuple[list[int], list[int], float, float]:
-        if any(self.intervals) and not is_cv:
-            for interval, indexes in self.intervals.items():
-                if interval[0] < z < interval[1]:
-                    M, O = indexes
-                    l = np.max([l, interval[0]])
-                    u = np.min([u, interval[1]])
-                    return M, O, l, u
+        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        if results is not None:
+            return results
 
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
@@ -440,7 +435,8 @@ class Lasso(FeatureSelection):
         assert l < z < u, "l < z < u is not satisfied"
 
         M = [M[i] for i in active_set]
-        self.intervals[(l, u)] = (M, O)
+
+        self.save_intervals(l, u, M, O, candidate_id, mask_id)
         return M, O, l, u
 
 
