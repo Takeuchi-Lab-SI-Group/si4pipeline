@@ -190,9 +190,9 @@ class PipelineStructure:
                 return self.M, [result.p_value for result in results]
         else:
             if is_result:
-                return self.M[test_index], results[0].p_value
-            else:
                 return self.M[test_index], results[0]
+            else:
+                return self.M[test_index], results[0].p_value
 
     def selection_event(
         self,
@@ -290,16 +290,16 @@ class PipelineStructure:
         else:
             (
                 selected_candidate,
+                selected_candidate_id,
                 l,
                 u,
-                selected_quadratic,
                 quadratic_at_each_candidate,
+                _,
             ) = self.cross_validate_error(a, b, z, l, u)
             l_list, u_list = [l], [u]
+            selected_quadratic = quadratic_at_each_candidate[selected_candidate_id]
             for candidate_id in range(self.n_iter):
-                candidate = self.candidates[candidate_id]
-                if candidate == selected_candidate:
-                    continue
+                # check
                 intervals = poly_lt_zero(
                     selected_quadratic - quadratic_at_each_candidate[candidate_id]
                 )
@@ -393,6 +393,7 @@ class PipelineStructure:
             if mse < old_mse:
                 old_mse = mse
                 selected_candidate = candidate
+                selected_candidate_id = candidate_id
                 selected_quadratic = (alpha, beta, gamma)
             selected_quadratic = np.array(selected_quadratic)
 
@@ -400,10 +401,11 @@ class PipelineStructure:
         self.set_parameters(self.best_candidate)
         return (
             selected_candidate,
+            selected_candidate_id,
             np.max(l_list),
             np.min(u_list),
-            selected_quadratic,
             quadratic_at_each_candidate,
+            old_mse,
         )
 
     def model_selector(self, indexes):
@@ -1143,6 +1145,10 @@ class MultiPipelineStructure:
                 outputs.append(pipeline(feature_matrix, response_vector))
             return outputs
 
+    def reset_intervals(self):
+        for pipeline in self.pipelines:
+            pipeline.reset_intervals()
+
     def inference(
         self,
         feature_matrix: np.ndarray,
@@ -1152,13 +1158,65 @@ class MultiPipelineStructure:
         is_result=False,
         **kwargs,
     ):
-        if self.tuned:
-            # to fix
-            return self.pipelines[self.best_index].inference(
-                feature_matrix, response_vector, sigma, test_index, is_result, **kwargs
-            )
-        else:
+        if not self.tuned:
             raise ValueError("Please tune the pipelines before inference.")
+
+        if "step" not in kwargs:
+            kwargs["step"] = 1e-6
+
+        for pipeline in self.pipelines:
+            pipeline.X = feature_matrix
+
+        self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
+        self.M, self.O = self(feature_matrix, response_vector)
+
+        pipeline = self.pipelines[self.best_index]
+        node = pipeline.static_order[1]
+        if isinstance(pipeline.components[node], MissingImputation):
+            self.y, self.cov = pipeline.components[node].compute_covariance(
+                feature_matrix, response_vector, sigma
+            )
+
+        n = self.y.shape[0]
+        X = np.delete(self.X, self.O, 0)
+        X = X[:, self.M]
+        Im = np.delete(np.eye(n), self.O, 0)
+
+        self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
+        if test_index is not None:
+            self.etas = [self.etas[test_index]]
+
+        self.calculators = []
+        results = []
+        for eta in self.etas:
+            self.reset_intervals()
+
+            if len(np.array(self.cov).shape) == 0:
+                stat_sigma = np.sqrt(self.cov * eta @ eta)
+            else:
+                stat_sigma = np.sqrt(eta @ self.cov @ eta)
+            max_tail = 20 * stat_sigma
+
+            calculator = SelectiveInferenceNorm(self.y, self.cov, eta)
+            result = calculator.inference(
+                self.algorithm,
+                self.model_selector,
+                max_tail=max_tail,
+                **kwargs,
+            )
+            results.append(result)
+            self.calculators.append(calculator)
+
+        if test_index is None:
+            if is_result:
+                return self.M, results
+            else:
+                return self.M, [result.p_value for result in results]
+        else:
+            if is_result:
+                return self.M[test_index], results[0]
+            else:
+                return self.M[test_index], results[0].p_value
 
     def tune(
         self,
@@ -1179,7 +1237,45 @@ class MultiPipelineStructure:
         self.tuned = True
 
     def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
-        pass
+        feature_matrix = self.X
+        old_mse = np.inf
+        quadratic_list = []
+
+        selected_features, detected_outliers, l, u = self.pipelines[
+            self.best_index
+        ].selection_event(feature_matrix, a, b, z, None, None)
+
+        l_list, u_list = [l], [u]
+        for i in range(len(self.pipelines)):
+            pipeline = self.pipelines[i]
+            (
+                selected_candidate,
+                selected_candidate_id,
+                l_cv,
+                u_cv,
+                quadratic_at_each_candidate,
+                mse,
+            ) = pipeline.cross_validate_error(a, b, z, l, u)
+            l_list.append(l_cv)
+            u_list.append(u_cv)
+
+            quadratic_list = quadratic_list + list(quadratic_at_each_candidate.values())
+            if mse < old_mse:
+                old_mse = mse
+                index = i
+                candidate = selected_candidate
+                selected_quadratic = quadratic_at_each_candidate[selected_candidate_id]
+
+        l_list, u_list = [np.max(l_list)], [np.min(u_list)]
+
+        for quadratic in quadratic_list:
+            intervals = poly_lt_zero(selected_quadratic - quadratic)
+            for interval in intervals:
+                if interval[0] < z < interval[1]:
+                    l_list.append(interval[0])
+                    u_list.append(interval[1])
+        l, u = np.max(l_list), np.min(u_list)
+        return (selected_features, detected_outliers, index, candidate), [l, u]
 
     def model_selector(self, indexes_pipelines):
         M, O, index, candidate = indexes_pipelines
