@@ -350,7 +350,7 @@ class Lasso(FeatureSelection):
         M = [M[i] for i in active_set]
         return M
 
-    def perform_si(
+    def perform_si_prev(
         self,
         a: np.ndarray,
         b: np.ndarray,
@@ -438,6 +438,110 @@ class Lasso(FeatureSelection):
 
         self.save_intervals(l, u, M, O, candidate_id, mask_id)
         return M, O, l, u
+
+    def compute_quotient(self, numerator, denominator):
+        if denominator == 0:
+            return np.inf
+        quotient = float(numerator / denominator)
+        if quotient <= 0:
+            return np.inf
+        return quotient
+
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
+    ) -> tuple[list[int], list[int], float, float]:
+        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        if results is not None:
+            return results
+
+        X = feature_matrix
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+
+        a, b = np.delete(a, O), np.delete(b, O)
+
+        z_eval = np.max([l, z - 0.1])
+        while z_eval < z:
+            yz = a + b * (z_eval + 1e-5)
+
+            lasso = lm.Lasso(
+                alpha=self.parameters, fit_intercept=False, max_iter=5000, tol=1e-10
+            )
+            lasso.fit(X, yz)
+            active_set = np.where(lasso.coef_ != 0)[0].tolist()
+            inactive_set = [i for i in range(X.shape[1]) if i not in active_set]
+
+            beta_active = lasso.coef_[active_set]
+
+            X_active = X[:, active_set]
+            X_inactive = X[:, inactive_set]
+
+            etaAz = np.array([])
+
+            if X_active is not None:
+                etaAz = (np.linalg.inv(X_active.T @ X_active) @ X_active.T) @ b
+
+            gammaAz = np.array([])
+            shAz = np.array([])
+
+            if X_inactive is not None:
+                if X_active is None:
+                    e1 = yz
+                else:
+                    e1 = yz - (X_active @ beta_active)
+
+                e2 = X_inactive.T @ e1
+                shAz = e2 / (self.parameters * X.shape[0])
+                if X_active is None:
+                    gammaAz = (X_inactive.T @ b) / X.shape[0]
+                else:
+                    gammaAz = (
+                        (X_inactive.T @ b) - ((X_inactive.T @ X_active) @ etaAz)
+                    ) / X.shape[0]
+
+            min1 = np.inf
+            min2 = np.inf
+
+            for i in range(len(etaAz)):
+                numerator = -beta_active[i]
+                denominator = etaAz[i]
+
+                quotient = self.compute_quotient(numerator, denominator)
+
+                if quotient < min1:
+                    min1 = quotient
+
+            for j in range(len(gammaAz)):
+                numerator = (np.sign(gammaAz[j]) - shAz[j]) * self.parameters
+                denominator = gammaAz[j]
+                quotient = self.compute_quotient(numerator, denominator)
+
+                if quotient < min2:
+                    min2 = quotient
+
+            tz = np.min([min1, min2])
+            M_updated = [M[i] for i in active_set]
+
+            z_next = np.min([z_eval + tz, u])
+            self.save_intervals(z_eval, z_next, M_updated, O, candidate_id, mask_id)
+            if z_eval < z < z_next:
+                pass
+                # print(z_eval, z, z_next)
+            z_eval = z_next
+
+        return self.load_intervals(z, l, u, candidate_id, mask_id)
 
 
 class ElasticNet(FeatureSelection):
