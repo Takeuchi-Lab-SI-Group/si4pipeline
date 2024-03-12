@@ -685,7 +685,7 @@ class MultiPipelineStructure:
             l_list.append(l_cv)
             u_list.append(u_cv)
 
-            quadratic_list = quadratic_list + list(quadratic_at_each_candidate.values())
+            quadratic_list.append(quadratic_at_each_candidate[selected_candidate_id])
             if mse < old_mse:
                 old_mse = mse
                 index = i
@@ -694,6 +694,8 @@ class MultiPipelineStructure:
 
         l_list, u_list = [np.max(l_list)], [np.min(u_list)]
 
+        assert l_list[0] < z < u_list[0], "1: l < z < u"
+
         for quadratic in quadratic_list:
             intervals = poly_lt_zero(selected_quadratic - quadratic)
             for interval in intervals:
@@ -701,6 +703,7 @@ class MultiPipelineStructure:
                     l_list.append(interval[0])
                     u_list.append(interval[1])
         l, u = np.max(l_list), np.min(u_list)
+        assert l < z < u, "2: l < z < u"
         return (selected_features, detected_outliers, index, candidate), [l, u]
 
     def model_selector(self, indexes_pipelines):
