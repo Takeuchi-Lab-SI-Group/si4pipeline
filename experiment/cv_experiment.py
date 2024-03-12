@@ -151,7 +151,8 @@ class ExperimentCV(PararellExperiment):
                     try:
                         _, result = mpls.inference(X, y, 1.0, index, is_result=True)
                         return result
-                    except:
+                    except Exception as e:
+                        print(e)
                         return None
         return None
 
