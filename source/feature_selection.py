@@ -350,7 +350,7 @@ class Lasso(FeatureSelection):
         M = [M[i] for i in active_set]
         return M
 
-    def perform_si_prev(
+    def perform_si(
         self,
         a: np.ndarray,
         b: np.ndarray,
@@ -447,7 +447,7 @@ class Lasso(FeatureSelection):
             return np.inf
         return quotient
 
-    def perform_si(
+    def perform_si_new(
         self,
         a: np.ndarray,
         b: np.ndarray,
@@ -541,7 +541,7 @@ class Lasso(FeatureSelection):
                 # print(z_eval, z, z_next)
             z_eval = z_next
 
-        return self.load_intervals(z, l, u, candidate_id, mask_id)
+        return self.load_sintervals(z, l, u, candidate_id, mask_id)
 
 
 class ElasticNet(FeatureSelection):
