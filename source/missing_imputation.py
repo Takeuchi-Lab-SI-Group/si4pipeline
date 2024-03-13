@@ -206,7 +206,7 @@ class ChebyshevImputation(MissingImputation):
         # imputation
         for index in missing_index:
             # chebyshev distance
-            X_chebyshev = np.max(np.abs(np.abs(X - X[index]), axis=1))
+            X_chebyshev = np.max(np.abs(X - X[index]), axis=1)
 
             # delete missing value
             X_chebyshev_deleted = np.delete(X_chebyshev, missing_index)
