@@ -144,21 +144,31 @@ class PipelineStructure:
         if "step" not in kwargs:
             kwargs["step"] = 1e-6
 
-        self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
+        self.X, self.y = feature_matrix, response_vector
         self.M, self.O = self(feature_matrix, response_vector)
 
+        # shape of imputer is (n, n - num_missing)
         node = self.static_order[1]
         if isinstance(self.components[node], MissingImputation):
-            self.y, self.cov = self.components[node].compute_covariance(
-                feature_matrix, response_vector, sigma
-            )
+            self.imputer = self.components[node].compute_imputer(self.X, self.y)
+        else:
+            self.imputer = np.eye(self.y.shape[0])
 
         n = self.y.shape[0]
-        X = np.delete(self.X, self.O, 0)
-        X = X[:, self.M]
-        Im = np.delete(np.eye(n), self.O, 0)
+        X = np.delete(self.X, self.O, 0)  # shape (n - |O|, p)
+        X = X[:, self.M]  # shape (n - |O|, |M|)
+        Im = np.delete(np.eye(n), self.O, 0)  # shape (n - |O|, n)
 
-        self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
+        etas = np.linalg.inv(X.T @ X) @ X.T @ Im  # shape (|M|, n)
+        self.etas = etas @ self.imputer  # shape (|M|, n - num_missing)
+
+        # to delete
+        for i in range(len(self.M)):
+            assert np.allclose(
+                etas[i] @ self.imputer @ self.y[~np.isnan(self.y)],
+                self.etas[i] @ self.y[~np.isnan(self.y)],
+            ), "etas"
+
         if test_index is not None:
             self.etas = [self.etas[test_index]]
 
@@ -166,14 +176,11 @@ class PipelineStructure:
         results = []
         for eta in self.etas:
             self.reset_intervals()
+            max_tail = 20 * np.sqrt((sigma**2.0) * eta @ eta)
 
-            if len(np.array(self.cov).shape) == 0:
-                stat_sigma = np.sqrt(self.cov * eta @ eta)
-            else:
-                stat_sigma = np.sqrt(eta @ self.cov @ eta)
-            max_tail = 20 * stat_sigma
-
-            calculator = SelectiveInferenceNorm(self.y, self.cov, eta)
+            calculator = SelectiveInferenceNorm(
+                self.y[~np.isnan(self.y)], sigma**2.0, eta
+            )
             result = calculator.inference(
                 self.algorithm,
                 self.model_selector,
@@ -280,9 +287,9 @@ class PipelineStructure:
         return selected_features, detected_outliers, l, u
 
     def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
-        feature_matrix = self.X
+        a, b = self.imputer @ a, self.imputer @ b
         selected_features, detected_outliers, l, u = self.selection_event(
-            feature_matrix, a, b, z, None, None
+            self.X, a, b, z, None, None
         )
 
         if not self.tuned:
@@ -387,7 +394,7 @@ class PipelineStructure:
             quadratic_at_each_candidate[candidate_id] = np.mean(quadratic_list, axis=0)
             alpha, beta, gamma = quadratic_at_each_candidate[candidate_id]
             mse = alpha * z**2 + beta * z + gamma
-            # print(mse, candidate) activate
+            # print(mse, candidate)  # activate
             if mse < old_mse:
                 old_mse = mse
                 selected_candidate = candidate
@@ -451,7 +458,10 @@ class PipelineStructure:
         X, y = feature_matrix, response_vector
         node = self.static_order[1]
         if isinstance(self.components[node], MissingImputation):
-            y = self.components[node].impute_missing(feature_matrix, response_vector)
+            self.imputer = self.components[node].compute_imputer(X, y)
+        else:
+            self.imputer = np.eye(y.shape[0])
+        y = self.imputer @ y[~np.isnan(y)]
 
         n = response_vector.shape[0]
 
@@ -485,7 +495,7 @@ class PipelineStructure:
                     mse_list.append(np.mean(y_error**2))
             mse_at_each_candidate.append(np.mean(mse_list))
 
-        # print(mse_at_each_candidate) activate
+        # print(mse_at_each_candidate)  # activate
         best_index = np.argmin(mse_at_each_candidate)
         self.best_mse = mse_at_each_candidate[best_index]
         self.best_candidate = self.candidates[best_index]
@@ -588,41 +598,48 @@ class MultiPipelineStructure:
         if "step" not in kwargs:
             kwargs["step"] = 1e-6
 
+        self.X, self.y = feature_matrix, response_vector
         for pipeline in self.pipelines:
             pipeline.X = feature_matrix
 
-        self.X, self.y, self.cov = feature_matrix, response_vector, sigma**2
         self.M, self.O = self(feature_matrix, response_vector)
 
         pipeline = self.pipelines[self.best_index]
+        # shape of imputer is (n, n - num_missing)
         node = pipeline.static_order[1]
         if isinstance(pipeline.components[node], MissingImputation):
-            self.y, self.cov = pipeline.components[node].compute_covariance(
-                feature_matrix, response_vector, sigma
-            )
+            self.imputer = pipeline.components[node].compute_imputer(self.X, self.y)
+        else:
+            self.imputer = np.eye(self.y.shape[0])
 
         n = self.y.shape[0]
-        X = np.delete(self.X, self.O, 0)
-        X = X[:, self.M]
-        Im = np.delete(np.eye(n), self.O, 0)
+        X = np.delete(self.X, self.O, 0)  # shape (n - |O|, p)
+        X = X[:, self.M]  # shape (n - |O|, |M|)
+        Im = np.delete(np.eye(n), self.O, 0)  # shape (n - |O|, n)
 
-        self.etas = np.linalg.inv(X.T @ X) @ X.T @ Im
+        etas = np.linalg.inv(X.T @ X) @ X.T @ Im  # shape (|M|, n)
+        self.etas = etas @ self.imputer  # shape (|M|, n - num_missing)
+
+        # to delete
+        for i in range(len(self.M)):
+            assert np.allclose(
+                etas[i] @ self.imputer @ self.y[~np.isnan(self.y)],
+                self.etas[i] @ self.y[~np.isnan(self.y)],
+            ), "etas"
+
         if test_index is not None:
             self.etas = [self.etas[test_index]]
 
         self.calculators = []
         results = []
-        # return None activate
+        # return None
         for eta in self.etas:
             self.reset_intervals()
+            max_tail = 20 * np.sqrt((sigma**2.0) * eta @ eta)
 
-            if len(np.array(self.cov).shape) == 0:
-                stat_sigma = np.sqrt(self.cov * eta @ eta)
-            else:
-                stat_sigma = np.sqrt(eta @ self.cov @ eta)
-            max_tail = 20 * stat_sigma
-
-            calculator = SelectiveInferenceNorm(self.y, self.cov, eta)
+            calculator = SelectiveInferenceNorm(
+                self.y[~np.isnan(self.y)], sigma**2.0, eta
+            )
             result = calculator.inference(
                 self.algorithm,
                 self.model_selector,
@@ -668,11 +685,14 @@ class MultiPipelineStructure:
 
         selected_features, detected_outliers, l, u = self.pipelines[
             self.best_index
-        ].selection_event(feature_matrix, a, b, z, None, None)
+        ].selection_event(
+            feature_matrix, self.imputer @ a, self.imputer @ b, z, None, None
+        )
 
         l_list, u_list = [l], [u]
         for i in range(len(self.pipelines)):
             pipeline = self.pipelines[i]
+            imputer = pipeline.imputer
             (
                 selected_candidate,
                 selected_candidate_id,
@@ -680,7 +700,7 @@ class MultiPipelineStructure:
                 u_cv,
                 quadratic_at_each_candidate,
                 mse,
-            ) = pipeline.cross_validate_error(a, b, z, l, u)
+            ) = pipeline.cross_validate_error(imputer @ a, imputer @ b, z, l, u)
             l_list.append(l_cv)
             u_list.append(u_cv)
 
