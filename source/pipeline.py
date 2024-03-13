@@ -347,8 +347,6 @@ class PipelineStructure:
                 ) = self.selection_event(X_tr, a_tr, b_tr, z, candidate_id, mask_id)
                 l_list.append(l_cv)
                 u_list.append(u_cv)
-                # print(candidate, mask_id)
-                # print(selected_features_cv)
 
                 X_tr = np.delete(X_tr, detected_outliers_cv, 0)
                 a_tr = np.delete(a_tr, detected_outliers_cv)
@@ -389,7 +387,7 @@ class PipelineStructure:
             quadratic_at_each_candidate[candidate_id] = np.mean(quadratic_list, axis=0)
             alpha, beta, gamma = quadratic_at_each_candidate[candidate_id]
             mse = alpha * z**2 + beta * z + gamma
-            # print(mse, candidate)
+            # print(mse, candidate) activate
             if mse < old_mse:
                 old_mse = mse
                 selected_candidate = candidate
@@ -487,7 +485,7 @@ class PipelineStructure:
                     mse_list.append(np.mean(y_error**2))
             mse_at_each_candidate.append(np.mean(mse_list))
 
-        # print(mse_at_each_candidate)
+        # print(mse_at_each_candidate) activate
         best_index = np.argmin(mse_at_each_candidate)
         self.best_mse = mse_at_each_candidate[best_index]
         self.best_candidate = self.candidates[best_index]
@@ -614,6 +612,7 @@ class MultiPipelineStructure:
 
         self.calculators = []
         results = []
+        # return None activate
         for eta in self.etas:
             self.reset_intervals()
 
