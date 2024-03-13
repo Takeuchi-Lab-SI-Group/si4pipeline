@@ -20,14 +20,14 @@ class MissingImputation:
     def impute_missing(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        raise NotImplementedError
+        imputer = self.compute_imputer(feature_matrix, response_vector)
+        return imputer @ response_vector[~np.isnan(response_vector)]
 
-    def compute_covariance(
+    def compute_imputer(
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
-        sigma: float,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> np.ndarray:
         raise NotImplementedError
 
 
@@ -35,269 +35,112 @@ class MeanValueImputation(MissingImputation):
     def __init__(self, name="mean_value_imputation"):
         super().__init__(name)
 
-    def impute_missing(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray
+    def compute_imputer(
+        feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        _, y = feature_matrix, response_vector.copy()
-
-        # location of missing value
-        missing_index = np.where(np.isnan(y))[0]
-
-        # other than missing value and its averate
-        y_delete = np.delete(y, missing_index)
-        y_mean = np.mean(y_delete)
-
-        # imputation
-        y[missing_index] = y_mean
-        return y
-
-    def compute_covariance(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        y_imputed = self.impute_missing(feature_matrix, response_vector)
-
-        n = response_vector.shape[0]
-        cov = sigma**2 * np.identity(n)
-        missing_index = np.where(np.isnan(response_vector))[0]
-
-        # update covariance
-        # (y_1 + y_2 + ... + y_(n-num_outliers)) / (n - num_outliers)
-        each_var_cov_value = sigma**2 / (n - len(missing_index))
-
-        cov[:, missing_index] = each_var_cov_value
-        cov[missing_index, :] = each_var_cov_value
-        return y_imputed, cov
+        nan_mask = np.isnan(response_vector)
+        num_missing = np.count_nonzero(nan_mask)
+        n = len(response_vector)
+        imputer = np.zeros((n, n - num_missing))  # (n, n - num_missing)
+        imputer[nan_mask] = 1 / (n - num_missing)
+        imputer[~nan_mask, :] = np.eye(n - num_missing)
+        return imputer
 
 
 class EuclideanImputation(MissingImputation):
     def __init__(self, name="euclidean_imputation"):
         super().__init__(name)
 
-    def impute_missing(
+    def compute_imputer(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector.copy()
+        X, y = feature_matrix, response_vector
+        nan_mask = np.isnan(y)
+        num_missing = np.count_nonzero(nan_mask)
+        n = len(y)
+        imputer = np.zeros((n, n - num_missing))  # shape (n, n - num_missing)
+        imputer[~nan_mask, :] = np.eye(n - num_missing)
 
-        # location of missing value
-        missing_index = np.where(np.isnan(y))[0]
-
-        # imputation
-        for index in missing_index:
-            # euclidean distance
-            X_euclidean = np.sqrt(np.sum((X - X[index]) ** 2, axis=1))
-
-            # delete missing value
-            X_euclidean_deleted = np.delete(X_euclidean, missing_index)
-            idx_deleted = np.argmin(X_euclidean_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_euclidean))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-
-            y[index] = y[idx]
-        return y
-
-    def compute_covariance(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        y_imputed = self.impute_missing(feature_matrix, response_vector)
-
-        n = response_vector.shape[0]
-        cov = sigma**2 * np.identity(n)
-        missing_index = np.where(np.isnan(response_vector))[0]
-
-        # imputation
-        idx_list = []
+        missing_index = np.where(nan_mask)[0]
         for index in missing_index:
             # euclidean distance
             X_euclidean = np.sqrt(
-                np.sum((feature_matrix - feature_matrix[index]) ** 2, axis=1)
-            )
-
-            # delete missing value
-            X_euclidean_deleted = np.delete(X_euclidean, missing_index)
-            idx_deleted = np.argmin(X_euclidean_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_euclidean))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-            idx_list.append(idx)
-
-        for index, idx in zip(missing_index, idx_list):
-            cov[index, idx] = sigma**2
-            cov[idx, index] = sigma**2
-        return y_imputed, cov
+                np.sum((X[~nan_mask, :] - X[index]) ** 2, axis=1)
+            )  # shape (n - num_missing, )
+            idx = np.argmin(X_euclidean)
+            imputer[index, idx] = 1.0
+        return imputer
 
 
 class ManhattanImputation(MissingImputation):
     def __init__(self, name="manhattan_imputation"):
         super().__init__(name)
 
-    def impute_missing(
+    def compute_imputer(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector.copy()
+        X, y = feature_matrix, response_vector
+        nan_mask = np.isnan(y)
+        num_missing = np.count_nonzero(nan_mask)
+        n = len(y)
+        imputer = np.zeros((n, n - num_missing))  # shape (n, n - num_missing)
+        imputer[~nan_mask, :] = np.eye(n - num_missing)
 
-        # location of missing value
-        missing_index = np.where(np.isnan(y))[0]
-
-        # imputation
+        missing_index = np.where(nan_mask)[0]
         for index in missing_index:
             # manhattan distance
-            X_manhattan = np.sum(np.abs(X - X[index]), axis=1)
-
-            # delete missing value
-            X_manhattan_deleted = np.delete(X_manhattan, missing_index)
-            idx_deleted = np.argmin(X_manhattan_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_manhattan))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-
-            y[index] = y[idx]
-        return y
-
-    def compute_covariance(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        y_imputed = self.impute_missing(feature_matrix, response_vector)
-
-        n = response_vector.shape[0]
-        cov = sigma**2 * np.identity(n)
-        missing_index = np.where(np.isnan(response_vector))[0]
-
-        # imputation
-        idx_list = []
-        for index in missing_index:
-            # manhattan distance
-            X_manhattan = np.sum(np.abs(feature_matrix - feature_matrix[index]), axis=1)
-
-            # delete missing value
-            X_manhattan_deleted = np.delete(X_manhattan, missing_index)
-            idx_deleted = np.argmin(X_manhattan_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_manhattan))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-            idx_list.append(idx)
-
-        for index, idx in zip(missing_index, idx_list):
-            cov[index, idx] = sigma**2
-            cov[idx, index] = sigma**2
-        return y_imputed, cov
+            X_manhattan = np.sum(
+                np.abs(X[~nan_mask] - X[index]), axis=1
+            )  # shape (n - num_missing, )
+            idx = np.argmin(X_manhattan)
+            imputer[index, idx] = 1.0
+        return imputer
 
 
 class ChebyshevImputation(MissingImputation):
     def __init__(self, name="chebyshev_imputation"):
         super().__init__(name)
 
-    def impute_missing(
+    def compute_imputer(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector.copy()
+        X, y = feature_matrix, response_vector
+        nan_mask = np.isnan(y)
+        num_missing = np.count_nonzero(nan_mask)
+        n = len(y)
+        imputer = np.zeros((n, n - num_missing))  # shape (n, n - num_missing)
+        imputer[~nan_mask, :] = np.eye(n - num_missing)
 
-        # location of missing value
-        missing_index = np.where(np.isnan(y))[0]
-
-        # imputation
+        missing_index = np.where(nan_mask)[0]
         for index in missing_index:
-            # chebyshev distance
-            X_chebyshev = np.max(np.abs(X - X[index]), axis=1)
-
-            # delete missing value
-            X_chebyshev_deleted = np.delete(X_chebyshev, missing_index)
-            idx_deleted = np.argmin(X_chebyshev_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_chebyshev))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-
-            y[index] = y[idx]
-        return y
-
-    def compute_covariance(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        y_imputed = self.impute_missing(feature_matrix, response_vector)
-
-        n = response_vector.shape[0]
-        cov = sigma**2 * np.identity(n)
-        missing_index = np.where(np.isnan(response_vector))[0]
-
-        # imputation
-        idx_list = []
-        for index in missing_index:
-            # chebyshev distance
-            X_chebyshev = np.max(np.abs(feature_matrix - feature_matrix[index]), axis=1)
-
-            # delete missing value
-            X_chebyshev_deleted = np.delete(X_chebyshev, missing_index)
-            idx_deleted = np.argmin(X_chebyshev_deleted)
-
-            # original index
-            original_indices = np.arange(len(X_chebyshev))
-            valid_indices = np.delete(original_indices, missing_index)
-            idx = valid_indices[idx_deleted]
-            idx_list.append(idx)
-
-        for index, idx in zip(missing_index, idx_list):
-            cov[index, idx] = sigma**2
-            cov[idx, index] = sigma**2
-        return y_imputed, cov
+            # manhattan distance
+            X_chebyshev = np.max(
+                np.abs(X[~nan_mask] - X[index]), axis=1
+            )  # shape (n - num_missing, )
+            idx = np.argmin(X_chebyshev)
+            imputer[index, idx] = 1.0
+        return imputer
 
 
 class DefiniteRegressionImputation(MissingImputation):
     def __init__(self, name="definite_regression_imputation"):
         super().__init__(name)
 
-    def impute_missing(
+    def compute_imputer(
         self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
-        X, y = feature_matrix, response_vector.copy()
+        X, y = feature_matrix, response_vector
+        nan_mask = np.isnan(y)
+        num_missing = np.count_nonzero(nan_mask)
+        n = len(y)
+        imputer = np.zeros((n, n - num_missing))
+        imputer[~nan_mask, :] = np.eye(n - num_missing)  # shape (n, n - num_missing)
 
-        # location of missing value
-        missing_index = np.where(np.isnan(y))[0]
-
-        X_delete = np.delete(X, missing_index, 0)
-        y_delete = np.delete(y, missing_index).reshape(-1, 1)
-
-        # imputation
-        beta_hat = np.linalg.inv(X_delete.T @ X_delete) @ X_delete.T @ y_delete
-        for index in missing_index:
-            X_missing = X[index]
-            y_new = X_missing @ beta_hat
-            y[index] = y_new
-
-        return y
-
-    def compute_covariance(
-        self, feature_matrix: np.ndarray, response_vector: np.ndarray, sigma: float
-    ) -> tuple[np.ndarray, np.ndarray]:
-        y_imputed = self.impute_missing(feature_matrix, response_vector)
-
-        n = response_vector.shape[0]
-        cov = sigma**2 * np.identity(n)
-        missing_index = np.where(np.isnan(response_vector))[0]
-
-        X = feature_matrix
-        X_delete = np.delete(X, missing_index, 0)
-
-        # update covariance
-        factor = np.linalg.inv(X_delete.T @ X_delete)
-        for index in missing_index:
-            X_missing = X[index]
-            for i in range(n):
-                each_x = X[i]
-                var_missing = sigma**2 * each_x @ factor @ X_missing.T
-                cov[i, index] = var_missing
-                cov[index, i] = var_missing
-
-        return y_imputed, cov
+        beta_hat_front = (
+            np.linalg.inv(X[~nan_mask, :].T @ X[~nan_mask, :]) @ X[~nan_mask, :].T
+        )
+        imputer[nan_mask, :] = X[nan_mask, :] @ beta_hat_front
+        return imputer
 
 
 def mean_value_imputation(feature_matrix, response_vector):
