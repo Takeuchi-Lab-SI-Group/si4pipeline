@@ -36,7 +36,7 @@ class MeanValueImputation(MissingImputation):
         super().__init__(name)
 
     def compute_imputer(
-        feature_matrix: np.ndarray, response_vector: np.ndarray
+        self, feature_matrix: np.ndarray, response_vector: np.ndarray
     ) -> np.ndarray:
         nan_mask = np.isnan(response_vector)
         num_missing = np.count_nonzero(nan_mask)
