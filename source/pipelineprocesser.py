@@ -5,7 +5,6 @@ from source.missing_imputation import (
     manhattan_imputation,
     chebyshev_imputation,
     definite_regression_imputation,
-    probabilistic_regression_imputation,
 )
 from source.outlier_detection import cook_distance, dffits, soft_ipod
 from source.feature_selection import (
