@@ -157,13 +157,15 @@ class ExperimentPipeline(PararellExperiment):
             elif self.option == "op2":
                 pl = option2()
             else:
+                flag = True
                 if self.option == "op1cv":
                     pl = option1_cv()
                 elif self.option == "op2cv":
                     pl = option2_cv()
                 else:
-                    pass
-                pl.tune(X, y, n_iter=16, cv=5, random_state=seed)  # fix seed
+                    flag = False
+                if flag:
+                    pl.tune(X, y, n_iter=16, cv=5, random_state=seed)  # fix seed
 
             if pl is not None:
                 M, _ = pl(X, y)
