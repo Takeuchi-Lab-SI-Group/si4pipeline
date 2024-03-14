@@ -57,6 +57,38 @@ def option2():
     return plp.make_pipeline(output=M)
 
 
+def option1_cv():
+    X, y = plp.make_dataset()
+    y = plp.mean_value_imputation(X, y)
+
+    O = plp.cook_distance(X, y, 3.0, {2.0, 3.0})
+    X, y = plp.remove_outliers(X, y, O)
+
+    M = plp.marginal_screening(X, y, 5, {3, 5})
+    X = plp.extract_features(X, M)
+
+    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
+    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
+    M = plp.union(M1, M2)
+    return plp.make_pipeline(output=M)
+
+
+def option2_cv():
+    X, y = plp.make_dataset()
+    y = plp.definite_regression_imputation(X, y)
+
+    M = plp.marginal_screening(X, y, 5, {3, 5})
+    X = plp.extract_features(X, M)
+
+    O = plp.dffits(X, y, 3.0, {2.0, 3.0})
+    X, y = plp.remove_outliers(X, y, O)
+
+    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
+    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
+    M = plp.intersection(M1, M2)
+    return plp.make_pipeline(output=M)
+
+
 class PararellExperiment(metaclass=ABCMeta):
     def __init__(self, num_iter: int, num_results: int, num_worker: int):
         self.num_iter = num_iter
@@ -80,12 +112,12 @@ class PararellExperiment(metaclass=ABCMeta):
         pass
 
 
-class ExperimentCV(PararellExperiment):
+class ExperimentDS(PararellExperiment):
     def __init__(
         self,
         num_results: int,
         num_worker: int,
-        option: str,
+        mode: str,
         n: int,
         p: int,
         delta: float,
@@ -97,7 +129,7 @@ class ExperimentCV(PararellExperiment):
             num_worker=num_worker,
         )
         self.num_results = num_results
-        self.option = option
+        self.mode = mode
         self.n = n
         self.p = p
         self.delta = delta
@@ -116,25 +148,63 @@ class ExperimentCV(PararellExperiment):
             y = X @ beta + noise
             num_missing = rng.binomial(self.n, 0.03)
             mask = rng.choice(self.n, num_missing, replace=False)
-            y[mask] = np.nan
+            # y[mask] = np.nan
 
-            if self.option == "op1":
+            pl = None
+            if self.mode == "op1":
                 pl = option1()
-            elif self.option == "op2":
+            elif self.mode == "op2":
                 pl = option2()
+            elif self.mode == "op1cv":
+                pl = option1_cv()
+            elif self.mode == "op2cv":
+                pl = option2_cv()
             else:
-                raise ValueError("Invalid option")
+                pass
 
-            M, _ = pl(X, y)
-            if len(M) == 0:
-                continue
-            index = rng.choice(len(M))
-            if self.delta == 0.0 or M[index] in range(3):
-                try:
-                    _, result = pl.inference(X, y, 1.0, index, is_result=True)
-                    return result
-                except:
-                    return None
+            if pl is not None:
+                if self.mode in ["op1cv", "op2cv"]:
+                    pl.tune(
+                        X[: self.n // 2, :],
+                        y[: self.n // 2],
+                        n_iter=16,
+                        cv=5,
+                        random_state=seed,
+                    )
+                M, _ = pl(X[: self.n // 2, :], y[: self.n // 2])
+                if len(M) == 0:
+                    continue
+                index = rng.choice(len(M))
+                if self.delta != 0.0 and M[index] not in range(3):
+                    continue
+            else:
+                if self.mode != "op1and2":
+                    raise ValueError("Invalid cv mode")
+                mpls = plp.make_pipelines(option1_cv(), option2_cv())
+                mpls.tune(
+                    X[: self.n // 2, :],
+                    y[: self.n // 2],
+                    n_iters=16,
+                    cv=5,
+                    random_state=seed,
+                )
+                M, _ = mpls(X[: self.n // 2, :], y[: self.n // 2])
+                if len(M) == 0:
+                    continue
+                index = rng.choice(len(M))
+                if self.delta != 0.0 and M[index] not in range(3):
+                    continue
+
+            y = y[self.n // 2 :]
+            X = X[self.n // 2 :, M]
+            nan_mask = np.isnan(y)
+            y = y[~nan_mask]
+            X = X[~nan_mask, :]
+
+            etas = np.linalg.inv(X.T @ X) @ X.T
+            eta = etas[index]
+            stat = eta @ y / np.sqrt(eta @ eta)
+            return 2 * norm.cdf(-np.abs(stat))
         return None
 
     def run_experiment(self):
@@ -147,7 +217,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_results", type=int, default=100)
     parser.add_argument("--num_worker", type=int, default=32)
-    parser.add_argument("--option", type=str, default="op1")
+    parser.add_argument("--mode", type=str, default="op1and2")
     parser.add_argument("--n", type=int, default=200)
     parser.add_argument("--p", type=int, default=20)
     parser.add_argument("--delta", type=float, default=0.0)
@@ -156,10 +226,10 @@ if __name__ == "__main__":
 
     print(args.n, args.p, args.delta, args.seed)
 
-    experiment = ExperimentCV(
+    experiment = ExperimentDS(
         num_results=args.num_results,
         num_worker=args.num_worker,
-        option=args.option,
+        mode=args.mode,
         n=args.n,
         p=args.p,
         delta=args.delta,
@@ -168,11 +238,11 @@ if __name__ == "__main__":
 
     experiment.run_experiment()
 
-    result_path = f"results_{args.option}"
+    result_path = f"results_ds"
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
-    file_name = f"{args.n}_{args.p}_{args.delta}_{args.seed}.pkl"
+    file_name = f"{args.mode}_{args.n}_{args.p}_{args.delta}_{args.seed}.pkl"
     print(args.n, args.p, args.delta, args.seed)
     file_path = os.path.join(result_path, file_name)
 
