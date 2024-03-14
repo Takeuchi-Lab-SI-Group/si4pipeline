@@ -124,7 +124,7 @@ class ExperimentPipeline(PararellExperiment):
         seed: int,
     ):
         super().__init__(
-            num_iter=int(num_results * 1.04),
+            num_iter=int(num_results * 1.12),
             num_results=num_results,
             num_worker=num_worker,
         )
