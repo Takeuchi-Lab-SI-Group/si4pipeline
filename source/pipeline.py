@@ -422,7 +422,7 @@ class PipelineStructure:
             return (
                 set(M) == set(self.M)
                 and set(O) == set(self.O)
-                and candidate == self.best_candidate
+                # and candidate == self.best_candidate
             )
 
     def __or__(self, other):
@@ -730,8 +730,8 @@ class MultiPipelineStructure:
         return (
             set(M) == set(self.M)
             and set(O) == set(self.O)
-            and self.best_index == index
-            and self.pipelines[self.best_index].best_candidate == candidate
+            # and self.best_index == index
+            # and self.pipelines[self.best_index].best_candidate == candidate
         )
 
     def __str__(self):
