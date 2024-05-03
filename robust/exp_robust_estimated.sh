@@ -1,0 +1,18 @@
+# bash
+
+file="../robust/robust_experiment_estimated.py"
+
+for option in op1 op2; do
+    for seed in $(seq 0 9); do
+        for n in 400 300 200 100; do
+            qsub \
+            -v MYARGS="--seed $seed --n $n --option $option",MYFILE=$file \
+            execute.sh
+        done
+        for p in 40 30 10; do
+            qsub \
+            -v MYARGS="--seed $seed --p $p --option $option",MYFILE=$file \
+            execute.sh
+        done
+    done
+done
