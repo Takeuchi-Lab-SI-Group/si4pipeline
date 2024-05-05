@@ -136,7 +136,7 @@ class PipelineStructure:
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
-        sigma: float,
+        sigma=None,
         test_index=None,  # int from 0 to |self.M|-1
         is_result=False,
         **kwargs,
@@ -153,6 +153,17 @@ class PipelineStructure:
             self.imputer = self.components[node].compute_imputer(self.X, self.y)
         else:
             self.imputer = np.eye(self.y.shape[0])
+
+        if sigma is None:
+            residuals = (
+                self.imputer @ self.y[~np.isnan(self.y)]
+                - self.X
+                @ np.linalg.inv(self.X.T @ self.X)
+                @ self.X.T
+                @ self.imputer
+                @ self.y[~np.isnan(self.y)]
+            )
+            sigma = np.std(residuals, ddof=self.X.shape[1])
 
         n = self.y.shape[0]
         X = np.delete(self.X, self.O, 0)  # shape (n - |O|, p)
@@ -587,7 +598,7 @@ class MultiPipelineStructure:
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
-        sigma: float,
+        sigma=None,
         test_index=None,  # int from 0 to |self.M|-1
         is_result=False,
         **kwargs,
@@ -611,6 +622,17 @@ class MultiPipelineStructure:
             self.imputer = pipeline.components[node].compute_imputer(self.X, self.y)
         else:
             self.imputer = np.eye(self.y.shape[0])
+
+        if sigma is None:
+            residuals = (
+                self.imputer @ self.y[~np.isnan(self.y)]
+                - self.X
+                @ np.linalg.inv(self.X.T @ self.X)
+                @ self.X.T
+                @ self.imputer
+                @ self.y[~np.isnan(self.y)]
+            )
+            sigma = np.std(residuals, ddof=self.X.shape[1])
 
         n = self.y.shape[0]
         X = np.delete(self.X, self.O, 0)  # shape (n - |O|, p)
