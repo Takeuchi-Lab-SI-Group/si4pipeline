@@ -44,7 +44,7 @@ def option1_cv():
     X, y = plp.make_dataset()
     y = plp.mean_value_imputation(X, y)
 
-    O = plp.soft_ipod(X, y, {0.02, 0.018})
+    O = plp.soft_ipod(X, y, 0.02, {0.02, 0.018})
     X, y = plp.remove_outliers(X, y, O)
 
     M = plp.marginal_screening(X, y, 5, {3, 5})
@@ -174,7 +174,7 @@ class ExperimentPipeline(PararellExperiment):
                     raise ValueError("Invalid option")
                 pl = plp.make_pipelines(option1_cv(), option2_cv())
                 pl.tune(
-                    X, y, n_iters=16, cv=5, random_state=seed
+                    X, y, n_iters=[16, 16], cv=5, random_state=seed
                 )  # not n_iter but n_iters for MultiPipeline, fix seed
                 M, _ = pl(X, y)
 
