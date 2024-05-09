@@ -1,6 +1,6 @@
 import numpy as np
 import sklearn.linear_model as lm
-from sicore import polytope_to_interval
+from sicore import polytope_to_interval, intersection
 from source.base_component import FeatureMatrix, ResponseVector, SelectedFeatures
 
 
@@ -231,6 +231,214 @@ class StepwiseFeatureSelection(FeatureSelection):
                         l_list.append(left)
                         u_list.append(right)
                         break
+
+        l = np.max(l_list)
+        u = np.min(u_list)
+        assert l < z < u, "l < z < u is not satisfied"
+
+        M = [M[i] for i in active_set]
+
+        self.save_intervals(l, u, M, O, candidate_id, mask_id)
+        return M, O, l, u
+
+
+class StepwiseFeatureSelectionWithAIC(FeatureSelection):
+    def __init__(
+        self,
+        name="stepwise_feature_selection_with_aic",
+        parameters=None,
+        candidates=None,
+    ):
+        super().__init__(name, parameters, candidates)
+        self.cov = None
+
+    def select_features(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+    ) -> list[int]:
+        X, y = feature_matrix, response_vector
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+        y = np.delete(y, O).reshape(-1, 1)
+
+        # initialize
+        min_aic = np.inf
+        active_set = []
+        inactive_set = list(range(X.shape[1]))
+        cov_inv = np.linalg.inv(self.cov)
+
+        # stepwise feature selection
+        while True:
+            aic_list = []
+            for inactive_feature in inactive_set:
+                active_temp = active_set + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                A_mk = (
+                    cov_inv
+                    - cov_inv
+                    @ X_active_temp
+                    @ np.linalg.inv(X_active_temp.T @ cov_inv @ X_active_temp)
+                    @ X_active_temp.T
+                    @ cov_inv
+                )
+                aic = y.T @ A_mk @ y + 2 * X_active_temp.shape[1]
+                aic_list.append(aic)
+
+            min_aic_index = np.argmin(aic_list)
+            min_aic_feature = aic_list[min_aic_index]
+
+            if min_aic_feature < min_aic:
+                min_aic = min_aic_feature
+                active_set.append(inactive_set.pop(min_aic_index))
+            else:
+                break
+
+        M = [M[i] for i in active_set]
+        return M
+
+    def perform_si(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        feature_matrix: np.ndarray,
+        selected_features: list[int],
+        detected_outliers: list[int],
+        l: float,
+        u: float,
+        candidate_id: int | None = None,
+        mask_id: int | None = None,
+    ) -> tuple[list[int], list[int], float, float]:  # type: ignore
+        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        if results is not None:
+            return results
+
+        X, y = feature_matrix, a + b * z
+        M, O = selected_features, detected_outliers
+
+        X = np.delete(X, O, 0)
+        X = X[:, M]
+        yz = np.delete(y, O).reshape(-1, 1)
+
+        a, b = np.delete(a, O), np.delete(b, O)
+
+        # initialize
+        min_aic = np.inf
+        active_set = []
+        inactive_set = list(range(X.shape[1]))
+        cov_inv = np.linalg.inv(self.cov)
+
+        while True:
+            aic_list = []
+            for inactive_feature in inactive_set:
+                active_temp = active_set + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                A_mk = (
+                    cov_inv
+                    - cov_inv
+                    @ X_active_temp
+                    @ np.linalg.inv(X_active_temp.T @ cov_inv @ X_active_temp)
+                    @ X_active_temp.T
+                    @ cov_inv
+                )
+                aic = y.T @ A_mk @ y + 2 * X_active_temp.shape[1]
+                aic_list.append(aic)
+
+            min_aic_index = np.argmin(aic_list)
+            min_aic_feature = aic_list[min_aic_index]
+
+            if min_aic_feature < min_aic:
+                min_aic = min_aic_feature
+                active_set.append(inactive_set.pop(min_aic_index))
+            else:
+                break
+
+        interval = [-np.inf, np.inf]
+        inactive_set = list(range(X.shape[1]))
+        l_list, u_list = [l], [u]
+
+        # 1,2つめの条件
+        for i in range(len(active_set)):
+            X_active_k = X[:, active_set[0 : i + 1]]
+            A_Mk = (
+                cov_inv
+                - cov_inv
+                @ X_active_k
+                @ np.linalg.pinv(X_active_k.T @ cov_inv @ X_active_k)
+                @ X_active_k.T
+                @ cov_inv
+            )
+            inactive_set.remove(active_set[i])
+            if i != 0:
+                X_active_k1 = X[:, active_set[0:i]]
+                A_Mk1 = (
+                    cov_inv
+                    - cov_inv
+                    @ X_active_k1
+                    @ np.linalg.pinv(X_active_k1.T @ cov_inv @ X_active_k1)
+                    @ X_active_k1.T
+                    @ cov_inv
+                )
+
+                intervals = polytope_to_interval(
+                    a, b, A_Mk - A_Mk1, np.zeros(X.shape[0]), 2
+                )
+                interval = intersection(intervals, interval)
+
+            for inactive_feature in inactive_set:
+                active_temp = active_set[0:i] + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                A_Mk_plus = (
+                    cov_inv
+                    - cov_inv
+                    @ X_active_temp
+                    @ np.linalg.pinv(X_active_temp.T @ cov_inv @ X_active_temp)
+                    @ X_active_temp.T
+                    @ cov_inv
+                )
+
+                intervals = polytope_to_interval(
+                    a, b, A_Mk - A_Mk_plus, np.zeros(X.shape[0]), 0
+                )
+                interval = intersection(intervals, interval)
+
+        # 3つめの条件
+        X_active_final = X[:, active_set]
+        A_Mk_final = (
+            cov_inv
+            - cov_inv
+            @ X_active_final
+            @ np.linalg.inv(X_active_final.T @ cov_inv @ X_active_final)
+            @ X_active_final.T
+            @ cov_inv
+        )
+        for inactive_feature in inactive_set:
+            active_final = active_set + [inactive_feature]
+            X_active_final_plus = X[:, active_final]
+            A_Mk_final_plus = (
+                cov_inv
+                - cov_inv
+                @ X_active_final_plus
+                @ np.linalg.inv(X_active_final_plus.T @ cov_inv @ X_active_final_plus)
+                @ X_active_final_plus.T
+                @ cov_inv
+            )
+
+            intervals = polytope_to_interval(
+                a, b, A_Mk_final - A_Mk_final_plus, np.zeros(X.shape[0]), -2
+            )
+            interval = intersection(intervals, interval)
+
+        for left, right in interval:
+            if left < z < right:
+                l_list.append(left)
+                u_list.append(right)
+                break
 
         l = np.max(l_list)
         u = np.min(u_list)
@@ -580,6 +788,13 @@ def stepwise_feature_selection(
     feature_matrix, response_vector, parameters=10, candidates=None
 ):
     return StepwiseFeatureSelection(parameters=parameters, candidates=candidates)(
+        feature_matrix, response_vector
+    )
+
+def stepwise_feature_selection_with_aic(
+    feature_matrix, response_vector, parameters=None, candidates=None
+):
+    return StepwiseFeatureSelectionWithAIC(parameters=parameters, candidates=candidates)(
         feature_matrix, response_vector
     )
 

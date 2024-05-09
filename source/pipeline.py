@@ -45,7 +45,39 @@ class PipelineStructure:
         ts = TopologicalSorter(self.graph)
         self.static_order = list(ts.static_order())
 
-    def __call__(self, feature_matrix: np.ndarray, response_vector: np.ndarray):
+    def __call__(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        # sigma=None
+    ):
+        # use_aic = False
+        # for node in self.static_order:
+        #     if "stepwise_feature_selection_with_aic" in node:
+        #         use_aic = True
+        #         aic_node_name = node
+
+        # if use_aic:
+        #     if sigma is None:
+        #         y_sigma = response_vector[~np.isnan(response_vector)]
+        #         X_sigma = feature_matrix[~np.isnan(response_vector), :]
+        #         residuals = (
+        #             y_sigma
+        #             - X_sigma @ np.linalg.inv(X_sigma.T @ X_sigma) @ X_sigma.T @ y_sigma
+        #         )
+        #         sigma = np.std(residuals, ddof=X_sigma.shape[1])
+
+        #     node = self.static_order[1]
+        #     if isinstance(self.components[node], MissingImputation):
+        #         imputer = self.components[node].compute_imputer(
+        #             feature_matrix, response_vector
+        #         )
+        #     else:
+        #         imputer = np.eye(response_vector.shape[0])
+
+        #     self.components[aic_node_name].cov = (sigma**2) * imputer @ imputer.T
+        #     print(imputer @ imputer.T)
+
         outputs = dict()
         for node in self.static_order:
             if node == "start":
