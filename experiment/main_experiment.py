@@ -28,7 +28,7 @@ def option1():
     X, y = plp.make_dataset()
     y = plp.mean_value_imputation(X, y)
 
-    O = plp.cook_distance(X, y, 3.0)
+    O = plp.soft_ipod(X, y, 0.02)
     X, y = plp.remove_outliers(X, y, O)
 
     M = plp.marginal_screening(X, y, 5)
@@ -44,7 +44,7 @@ def option1_cv():
     X, y = plp.make_dataset()
     y = plp.mean_value_imputation(X, y)
 
-    O = plp.cook_distance(X, y, 3.0, {2.0, 3.0})
+    O = plp.soft_ipod(X, y, {0.02, 0.018})
     X, y = plp.remove_outliers(X, y, O)
 
     M = plp.marginal_screening(X, y, 5, {3, 5})
@@ -63,7 +63,7 @@ def option2():
     M = plp.marginal_screening(X, y, 5)
     X = plp.extract_features(X, M)
 
-    O = plp.dffits(X, y, 3.0)
+    O = plp.cook_distance(X, y, 3.0)
     X, y = plp.remove_outliers(X, y, O)
 
     M1 = plp.stepwise_feature_selection(X, y, 3)
@@ -79,7 +79,7 @@ def option2_cv():
     M = plp.marginal_screening(X, y, 5, {3, 5})
     X = plp.extract_features(X, M)
 
-    O = plp.dffits(X, y, 3.0, {2.0, 3.0})
+    O = plp.cook_distance(X, y, 3.0, {2.0, 3.0})
     X, y = plp.remove_outliers(X, y, O)
 
     M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})

@@ -1,5 +1,6 @@
 import numpy as np
 import sklearn.linear_model as lm
+from sicore import polytope_to_interval
 from source.base_component import FeatureMatrix, ResponseVector, SelectedFeatures
 
 
@@ -116,18 +117,34 @@ class StepwiseFeatureSelection(FeatureSelection):
         y = np.delete(y, O).reshape(-1, 1)
 
         # initialize
+        min_mse = np.inf
         active_set = []
         inactive_set = list(range(X.shape[1]))
 
         # stepwise feature selection
         for _ in range(self.parameters):
-            X_active = X[:, active_set]
-            r = y - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T @ y
-            correlation = X[:, inactive_set].T @ r
+            mse_list = []
+            for inactive_feature in inactive_set:
+                active_temp = active_set + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                r = (
+                    np.identity(X.shape[0])
+                    - X_active_temp
+                    @ np.linalg.pinv(X_active_temp.T @ X_active_temp)
+                    @ X_active_temp.T
+                ) @ y
+                mse = r.T @ r
+                mse_list.append(mse)
 
-            ind = np.argmax(np.abs(correlation))
-            active_set.append(inactive_set[ind])
-            inactive_set.remove(inactive_set[ind])
+            min_mse_index = np.argmin(mse_list)
+            min_mse_feature = mse_list[min_mse_index]
+
+            if min_mse_feature < min_mse:
+                min_mse = min_mse_feature
+                active_set.append(inactive_set.pop(min_mse_index))
+            else:
+                break
+
         M = [M[i] for i in active_set]
         return M
 
@@ -157,58 +174,63 @@ class StepwiseFeatureSelection(FeatureSelection):
 
         a, b = np.delete(a, O), np.delete(b, O)
 
+        # initialize
+        min_mse = np.inf
         active_set = []
         inactive_set = list(range(X.shape[1]))
-        signs = []
 
+        # stepwise feature selection
         for _ in range(self.parameters):
-            X_active = X[:, active_set]
-            r = yz - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T @ yz
-            correlation = X[:, inactive_set].T @ r
+            mse_list = []
+            for inactive_feature in inactive_set:
+                active_temp = active_set + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                r = (
+                    np.identity(X.shape[0])
+                    - X_active_temp
+                    @ np.linalg.pinv(X_active_temp.T @ X_active_temp)
+                    @ X_active_temp.T
+                ) @ yz
+                mse = r.T @ r
+                mse_list.append(mse)
 
-            ind = np.argmax(np.abs(correlation))
-            active_set.append(inactive_set[ind])
-            inactive_set.remove(inactive_set[ind])
-            signs.append(np.sign(correlation[ind]))
+            min_mse_index = np.argmin(mse_list)
+            min_mse_feature = mse_list[min_mse_index]
 
-        left_list = []
-        right_list = []
+            if min_mse_feature < min_mse:
+                min_mse = min_mse_feature
+                active_set.append(inactive_set.pop(min_mse_index))
+            else:
+                break
+
+        l_list, u_list = [l], [u]
         inactive_set = list(range(X.shape[1]))
 
         for i in range(self.parameters):
-            X_active = X[:, active_set[:i]]
-            x_jt = X[:, active_set[i]]
-            sign_t = signs[i]
-            F = (
+            X_active_k = X[:, active_set[0 : i + 1]]
+            mse_active_k = (
                 np.identity(X.shape[0])
-                - X_active @ np.linalg.pinv(X_active.T @ X_active) @ X_active.T
+                - X_active_k @ np.linalg.pinv(X_active_k.T @ X_active_k) @ X_active_k.T
             )
             inactive_set.remove(active_set[i])
+            for inactive_feature in inactive_set:
+                active_temp = active_set[0:i] + [inactive_feature]
+                X_active_temp = X[:, active_temp]
+                mse_active_temp = (
+                    np.identity(X.shape[0])
+                    - X_active_temp
+                    @ np.linalg.pinv(X_active_temp.T @ X_active_temp)
+                    @ X_active_temp.T
+                )
 
-            for j in inactive_set:
-                x_j = X[:, j]
+                quad_A = mse_active_k - mse_active_temp
 
-                left1 = (x_j - sign_t * x_jt).T @ F @ b
-                left2 = (-x_j - sign_t * x_jt).T @ F @ b
-                right1 = -(x_j - sign_t * x_jt).T @ F @ a
-                right2 = -(-x_j - sign_t * x_jt).T @ F @ a
-
-                left_list.append(left1)
-                left_list.append(left2)
-                right_list.append(right1)
-                right_list.append(right2)
-
-        l_list, u_list = [l], [u]
-        for left, right in zip(left_list, right_list):
-            if np.around(left, 5) == 0:
-                if right <= 0:
-                    raise ValueError("l must be less than u")
-                continue
-            term = right / left
-            if left > 0:
-                u_list.append(term)
-            else:
-                l_list.append(term)
+                intervals = polytope_to_interval(a, b, quad_A, np.zeros(X.shape[0]), 0)
+                for left, right in intervals:
+                    if left < z < right:
+                        l_list.append(left)
+                        u_list.append(right)
+                        break
 
         l = np.max(l_list)
         u = np.min(u_list)
