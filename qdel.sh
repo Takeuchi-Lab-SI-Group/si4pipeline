@@ -1,5 +1,5 @@
 # bash
 
-for num in $(seq 30813 30852); do
+for num in $(seq 33603 33672); do
     qdel $num
 done

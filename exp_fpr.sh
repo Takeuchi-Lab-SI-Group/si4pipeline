@@ -2,7 +2,7 @@
 
 file="main_experiment.py"
 
-for option in op1 op2 op1cv op2cv op12cv; do
+for option in op2cv op12cv; do
     for seed in $(seq 0 9); do
         for n in 400 300 200 100; do
             qsub \
