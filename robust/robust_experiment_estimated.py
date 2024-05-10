@@ -28,7 +28,7 @@ def option1():
     X, y = plp.make_dataset()
     y = plp.mean_value_imputation(X, y)
 
-    O = plp.cook_distance(X, y, 3.0)
+    O = plp.soft_ipod(X, y, 0.02)
     X, y = plp.remove_outliers(X, y, O)
 
     M = plp.marginal_screening(X, y, 5)
@@ -40,6 +40,22 @@ def option1():
     return plp.make_pipeline(output=M)
 
 
+def option1_cv():
+    X, y = plp.make_dataset()
+    y = plp.mean_value_imputation(X, y)
+
+    O = plp.soft_ipod(X, y, 0.02, {0.02, 0.018})
+    X, y = plp.remove_outliers(X, y, O)
+
+    M = plp.marginal_screening(X, y, 5, {3, 5})
+    X = plp.extract_features(X, M)
+
+    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
+    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
+    M = plp.union(M1, M2)
+    return plp.make_pipeline(output=M)
+
+
 def option2():
     X, y = plp.make_dataset()
     y = plp.definite_regression_imputation(X, y)
@@ -47,11 +63,27 @@ def option2():
     M = plp.marginal_screening(X, y, 5)
     X = plp.extract_features(X, M)
 
-    O = plp.dffits(X, y, 3.0)
+    O = plp.cook_distance(X, y, 3.0)
     X, y = plp.remove_outliers(X, y, O)
 
     M1 = plp.stepwise_feature_selection(X, y, 3)
     M2 = plp.lasso(X, y, 0.08)
+    M = plp.intersection(M1, M2)
+    return plp.make_pipeline(output=M)
+
+
+def option2_cv():
+    X, y = plp.make_dataset()
+    y = plp.definite_regression_imputation(X, y)
+
+    M = plp.marginal_screening(X, y, 5, {3, 5})
+    X = plp.extract_features(X, M)
+
+    O = plp.cook_distance(X, y, 3.0, {2.0, 3.0})
+    X, y = plp.remove_outliers(X, y, O)
+
+    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
+    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
     M = plp.intersection(M1, M2)
     return plp.make_pipeline(output=M)
 
@@ -108,23 +140,39 @@ class ExperimentPipeline(PararellExperiment):
             X = rng.normal(size=(self.n, self.p))
             y = rng.normal(size=self.n)
 
+            pl = None
             if self.option == "op1":
                 pl = option1()
             elif self.option == "op2":
                 pl = option2()
             else:
-                raise ValueError("Invalid option")
-            M, _ = pl(X, y)
+                flag = True
+                if self.option == "op1cv":
+                    pl = option1_cv()
+                elif self.option == "op2cv":
+                    pl = option2_cv()
+                else:
+                    flag = False
+                if flag:
+                    pl.tune(X, y, n_iter=16, cv=5, random_state=seed)  # fix seed
+
+            if pl is not None:
+                M, _ = pl(X, y)
+            else:
+                if self.option != "op12cv":
+                    raise ValueError("Invalid option")
+                pl = plp.make_pipelines(option1_cv(), option2_cv())
+                pl.tune(
+                    X, y, n_iters=[16, 16], cv=5, random_state=seed
+                )  # not n_iter but n_iters for MultiPipeline, fix seed
+                M, _ = pl(X, y)
 
             if len(M) == 0:
                 continue
             index = rng.choice(len(M))
 
-            residuals = y - X @ np.linalg.inv(X.T @ X) @ X.T @ y
-            sigma = np.std(residuals, ddof=self.p)
-
             try:
-                _, result = pl.inference(X, y, sigma, index, is_result=True)
+                _, result = pl.inference(X, y, None, index, is_result=True)
             except Exception as e:
                 return None
             return result
