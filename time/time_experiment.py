@@ -48,12 +48,12 @@ def option_parallel():
     O = plp.soft_ipod(X, y, 0.02)
     X, y = plp.remove_outliers(X, y, O)
 
-    M = plp.marginal_screening(X, y, 15)
+    M = plp.marginal_screening(X, y, 20)
     X = plp.extract_features(X, M)
 
-    M1 = plp.stepwise_feature_selection(X, y, 10)
-    M2 = plp.lasso(X, y, 0.04)
-    M = plp.intersection(M1, M2)
+    M1 = plp.stepwise_feature_selection(X, y, 5)
+    M2 = plp.lasso(X, y, 0.06)
+    M = plp.union(M1, M2)
 
     X = plp.extract_features(X, M)
 
@@ -70,13 +70,13 @@ def option_serial():
     O = plp.soft_ipod(X, y, 0.02)
     X, y = plp.remove_outliers(X, y, O)
 
-    M = plp.marginal_screening(X, y, 15)
+    M = plp.marginal_screening(X, y, 20)
+    X = plp.extract_features(X, M)
+
+    M = plp.stepwise_feature_selection(X, y, 10)
     X = plp.extract_features(X, M)
 
     M = plp.lasso(X, y, 0.04)
-    X = plp.extract_features(X, M)
-
-    M = plp.stepwise_feature_selection(X, y, 6)
     X = plp.extract_features(X, M)
 
     M1 = plp.stepwise_feature_selection(X, y, 3)
@@ -156,10 +156,14 @@ class ExperimentPipeline(PararellExperiment):
             elif self.option == "serial":
                 pl = option_serial()
 
-            M, _ = pl(X, y)
+            try:
+                M, _ = pl(X, y)
+            except Exception:
+                continue
 
             if len(M) == 0:
                 continue
+
             index = rng.choice(len(M))
             if self.delta == 0.0 or M[index] in range(3):
                 try:
@@ -182,19 +186,19 @@ class ExperimentPipeline(PararellExperiment):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_results", type=int, default=1000)
+    parser.add_argument("--num_results", type=int, default=50)
     parser.add_argument("--num_worker", type=int, default=32)
     parser.add_argument(
         "--option", type=str, default="default"
     )  # default, parallel, serial
-    parser.add_argument("--n", type=int, default=200)
-    parser.add_argument("--p", type=int, default=20)
+    parser.add_argument("--n", type=int, default=800)
+    parser.add_argument("--p", type=int, default=80)
     parser.add_argument("--delta", type=float, default=0.0)
     parser.add_argument("--oc", type=str, default="none")  # oc or none
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    print(args.n, args.p, args.delta, args.seed)
+    print(args.n, args.p, args.option, args.seed)
 
     experiment = ExperimentPipeline(
         num_results=args.num_results,
