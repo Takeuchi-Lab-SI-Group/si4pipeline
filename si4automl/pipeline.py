@@ -1,8 +1,14 @@
+"""Module providing the classes for the data analysis pipeline and the multi-pipeline structure."""
+
 from graphlib import TopologicalSorter
 from itertools import product
 
 import numpy as np
-from sicore import SelectiveInferenceNorm
+from sicore import (  # type: ignore[import]
+    SelectiveInferenceNorm,
+    SelectiveInferenceResult,
+    polynomial_below_zero,
+)
 
 from si4automl.base_component import (
     ExtractFeatures,
@@ -20,38 +26,75 @@ from si4automl.outlier_detection import OutlierDetection
 
 
 class PipelineStructure:
-    def __init__(self):
-        self.nodes = set()
-        self.edges = set()
-        self.components = {"start": None}
+    """A class for the data analysis pipeline."""
+
+    def __init__(self) -> None:
+        """Initialize the PipelineStructure object."""
+        self.nodes: set[str] = set()
+        self.edges: set[tuple[str, str]] = set()
+        self.components: dict[
+            str,
+            None
+            | FeatureSelection
+            | MissingImputation
+            | OutlierDetection
+            | IndexesOperator
+            | ExtractFeatures
+            | RemoveOutliers,
+        ] = {"start": None}
         self.current_node = "start"
         self.tuned = False
 
-    def update(self, node, component):
+    def update(
+        self,
+        node: str,
+        component: None
+        | FeatureSelection
+        | MissingImputation
+        | OutlierDetection
+        | IndexesOperator
+        | ExtractFeatures
+        | RemoveOutliers,
+    ) -> None:
+        """Update the pipeline structure with a new node and component."""
         self.add_node(node, component)
         self.add_edge(self.current_node, node)
         self.current_node = node
 
-    def add_node(self, node, component):
+    def add_node(
+        self,
+        node: str,
+        component: None
+        | FeatureSelection
+        | MissingImputation
+        | OutlierDetection
+        | IndexesOperator
+        | ExtractFeatures
+        | RemoveOutliers,
+    ) -> None:
+        """Add a new node and component to the pipeline structure."""
         self.nodes.add(node)
         self.components[node] = component
 
-    def add_edge(self, sender, reciever):
+    def add_edge(self, sender: str, reciever: str) -> None:
+        """Add a new edge to the pipeline structure."""
         self.edges.add((sender, reciever))
 
-    def make_graph(self):
-        self.graph = dict()
+    def make_graph(self) -> None:
+        """Make a graph representation of the pipeline structure."""
+        self.graph: dict[str, set[str]] = {}
         for edge in self.edges:
             self.graph.setdefault(edge[1], set()).add(edge[0])
         ts = TopologicalSorter(self.graph)
-        self.static_order = list(ts.static_order())
+        self.static_order: list[str] = list(ts.static_order())
 
     def __call__(
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
         # sigma=None
-    ):
+    ) -> tuple[list[int], list[int]]:
+        """Perform the data analysis pipeline."""
         # use_aic = False
         # for node in self.static_order:
         #     if "stepwise_feature_selection_with_aic" in node:
@@ -79,18 +122,19 @@ class PipelineStructure:
         #     self.components[aic_node_name].cov = (sigma**2) * imputer @ imputer.T
         #     print(imputer @ imputer.T)
 
-        outputs = dict()
+        outputs: dict[str, tuple[list[int], list[int]]] = {}
         for node in self.static_order:
+            layer = self.components[node]
             if node == "start":
-                selected_features = list(range(feature_matrix.shape[1]))
-                detected_outliers = []
+                selected_features: list[int] = list(range(feature_matrix.shape[1]))
+                detected_outliers: list[int] = []
                 outputs[node] = (selected_features, detected_outliers)
 
             elif isinstance(
-                self.components[node],
-                (FeatureSelection, OutlierDetection),
+                layer,
+                (FeatureSelection | OutlierDetection),
             ):
-                layer = self.components[node]
+                # layer = self.components[node]
                 parants = list(self.graph[node])
                 assert len(parants) == 1
                 selected_features, detected_outliers = outputs[parants[0]]
@@ -110,23 +154,22 @@ class PipelineStructure:
                         detected_outliers,
                     )
                 else:
-                    raise TypeError(
-                        "Input must be FeatureSelection or OutlierDetection",
-                    )
+                    raise TypeError  # Input must be FeatureSelection or OutlierDetection
                 outputs[node] = (selected_features, detected_outliers)
 
-            elif isinstance(self.components[node], MissingImputation):
+            elif isinstance(layer, MissingImputation):  # changed
+                # layer = self.components[node]
                 parants = list(self.graph[node])
                 assert len(parants) == 1
                 selected_features, detected_outliers = outputs[parants[0]]
-                response_vector = self.components[node].impute_missing(
+                response_vector = layer.impute_missing(
                     feature_matrix,
                     response_vector,
                 )
                 outputs[node] = (selected_features, detected_outliers)
 
-            elif isinstance(self.components[node], IndexesOperator):
-                layer = self.components[node]
+            elif isinstance(layer, IndexesOperator):  # changed
+                # layer = self.components[node]
                 parants = list(self.graph[node])
                 selected_features_list = []
                 detected_outliers_list = []
@@ -139,7 +182,7 @@ class PipelineStructure:
                 elif isinstance(layer, Intersection):
                     process = layer.intersection
                 else:
-                    raise TypeError("Input must be Union or Intersection")
+                    raise TypeError  # Input must be Union or Intersection
                 if layer.mode == "selected_features":
                     selected_features = process(*selected_features_list)
                     detected_outliers = detected_outliers_list[0]
@@ -148,7 +191,7 @@ class PipelineStructure:
                     detected_outliers = process(*detected_outliers_list)
                 outputs[node] = (selected_features, detected_outliers)
 
-            elif isinstance(self.components[node], (RemoveOutliers, ExtractFeatures)):
+            elif isinstance(layer, (RemoveOutliers | ExtractFeatures)):  # changed
                 parents = list(self.graph[node])
                 assert len(parents) == 1
                 selected_features, detected_outliers = outputs[parents[0]]
@@ -159,33 +202,44 @@ class PipelineStructure:
                 assert len(parants) == 1
                 selected_features, detected_outliers = outputs[parants[0]]
                 return selected_features, detected_outliers
-        raise ValueError("There is no end node")
+        raise ValueError  # There is no end node
 
-    def reset_intervals(self):
+    def reset_intervals(self) -> None:
+        """Reset the intervals of the selective inference calculators for each node."""
         for node in self.static_order:
-            if isinstance(self.components[node], (FeatureSelection, OutlierDetection)):
-                self.components[node].reset_intervals()
-        self.cv_quadratic = dict()
+            layer = self.components[node]  # changed
+            if isinstance(
+                layer,
+                (FeatureSelection | OutlierDetection),
+            ):
+                layer.reset_intervals()
+        self.cv_quadratic = {}
 
     def inference(
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
-        sigma=None,
-        test_index=None,  # int from 0 to |self.M|-1
-        is_result=False,
-        **kwargs,
+        sigma: float | None = None,
+        test_index: int | None = None,  # int from 0 to |self.M|-1
+        *,
+        is_result: bool = False,
+        # **kwargs,
+    ) -> (
+        tuple[list[int], list[SelectiveInferenceResult] | list[float]]
+        | tuple[int, float]
     ):
-        if "step" not in kwargs:
-            kwargs["step"] = 1e-6
+        """Execute the selective inference for the pipeline."""
+        # if "step" not in kwargs:
+        #     kwargs["step"] = 1e-6
 
         self.X, self.y = feature_matrix, response_vector
         self.M, self.O = self(feature_matrix, response_vector)
 
         # shape of imputer is (n, n - num_missing)
         node = self.static_order[1]
-        if isinstance(self.components[node], MissingImputation):
-            self.imputer = self.components[node].compute_imputer(self.X, self.y)
+        layer = self.components[node]
+        if isinstance(layer, MissingImputation):
+            self.imputer = layer.compute_imputer(self.X, self.y)
         else:
             self.imputer = np.eye(self.y.shape[0])
 
@@ -219,21 +273,20 @@ class PipelineStructure:
             self.etas = [self.etas[test_index]]
 
         self.calculators = []
-        results = []
+        results: list[SelectiveInferenceResult] = []
         for eta in self.etas:
             self.reset_intervals()
-            max_tail = 20 * np.sqrt((sigma**2.0) * eta @ eta)
+            # max_tail = 20 * np.sqrt((sigma**2.0) * eta @ eta)
 
             calculator = SelectiveInferenceNorm(
                 self.y[~np.isnan(self.y)],
                 sigma**2.0,
                 eta,
             )
-            result = calculator.inference(
+            result: SelectiveInferenceResult = calculator.inference(
                 self.algorithm,
                 self.model_selector,
-                max_tail=max_tail,
-                **kwargs,
+                # **kwargs,
             )
             results.append(result)
             self.calculators.append(calculator)
@@ -254,21 +307,24 @@ class PipelineStructure:
         z: float,
         candidate_id: int | None = None,
         mask_id: int | None = None,
-    ):
-        outputs = dict()
+    ) -> tuple[list[int], list[int], float, float]:
+        """Compute the selection event for given point."""
+        outputs: dict[str, tuple[list[int], list[int], float, float]] = {}
         feature_matrix = X
 
         for node in self.static_order:
+            layer = self.components[node]
+
             if node == "start":
-                selected_features = list(range(feature_matrix.shape[1]))
-                detected_outliers = []
+                selected_features: list[int] = list(range(feature_matrix.shape[1]))
+                detected_outliers: list[int] = []
                 outputs[node] = (selected_features, detected_outliers, -np.inf, np.inf)
 
             elif isinstance(
-                self.components[node],
-                (FeatureSelection, OutlierDetection),
+                layer,  # changed
+                (FeatureSelection | OutlierDetection),
             ):
-                layer = self.components[node]
+                # layer = self.components[node]
                 parants = list(self.graph[node])
                 assert len(parants) == 1
                 selected_features, detected_outliers, l, u = outputs[parants[0]]
@@ -287,16 +343,16 @@ class PipelineStructure:
                 outputs[node] = (selected_features, detected_outliers, l, u)
 
             elif isinstance(
-                self.components[node],
-                (MissingImputation, RemoveOutliers, ExtractFeatures),
+                layer,  # changed
+                (MissingImputation | RemoveOutliers | ExtractFeatures),
             ):
                 parants = list(self.graph[node])
                 assert len(parants) == 1
                 selected_features, detected_outliers, l, u = outputs[parants[0]]
                 outputs[node] = (selected_features, detected_outliers, l, u)
 
-            elif isinstance(self.components[node], IndexesOperator):
-                layer = self.components[node]
+            elif isinstance(layer, IndexesOperator):  # changed
+                # layer = self.components[node]
                 parants = list(self.graph[node])
                 selected_features_list = []
                 detected_outliers_list = []
@@ -312,7 +368,7 @@ class PipelineStructure:
                 elif isinstance(layer, Intersection):
                     process = layer.intersection
                 else:
-                    raise TypeError("Input must be Union or Intersection")
+                    raise TypeError  # Input must be Union or Intersection
                 if layer.mode == "selected_features":
                     selected_features = process(*selected_features_list)
                     detected_outliers = detected_outliers_list[0]
@@ -328,11 +384,20 @@ class PipelineStructure:
                 selected_features, detected_outliers, l, u = outputs[parants[0]]
 
         if node != "end":
-            raise ValueError("There is no end node")
+            raise ValueError  # There is no end node
 
         return selected_features, detected_outliers, l, u
 
-    def algorithm(self, a: np.ndarray, b: np.ndarray, z: float):
+    def algorithm(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+    ) -> tuple[
+        tuple[list[int], list[int]] | tuple[list[int], list[int], int],
+        list[float],
+    ]:
+        """Algorithm for the selective inference."""
         a, b = self.imputer @ a, self.imputer @ b
         selected_features, detected_outliers, l, u = self.selection_event(
             self.X,
@@ -357,7 +422,7 @@ class PipelineStructure:
         selected_quadratic = quadratic_at_each_candidate[selected_candidate_id]
         for candidate_id in range(self.n_iter):
             # check
-            intervals = poly_lt_zero(
+            intervals = polynomial_below_zero(
                 selected_quadratic - quadratic_at_each_candidate[candidate_id],
             )
             for interval in intervals:
@@ -588,14 +653,14 @@ class PipelineStructure:
             for index in indexes:
                 self.candidates.append(
                     dict(
-                        zip(finite_keys, finite_candidates_grids[index], strict=False)
+                        zip(finite_keys, finite_candidates_grids[index], strict=False),
                     ),
                 )
         else:
             for _ in range(self.n_iter):
                 i = self.rng.choice(num_grids)
                 temp_dict = dict(
-                    zip(finite_keys, finite_candidates_grids[i], strict=False)
+                    zip(finite_keys, finite_candidates_grids[i], strict=False),
                 )
                 for key, dist in dist_dict.items():
                     temp_dict[key] = dist.rvs()
