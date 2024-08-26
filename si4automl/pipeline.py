@@ -42,6 +42,7 @@ class Pipeline:
             int,
             dict[tuple[float, float], list[float]],
         ] = {}
+        self.imputer: np.ndarray | None = None
         self._validate()
 
     def _validate(self) -> None:
@@ -176,7 +177,6 @@ class Pipeline:
                     )
                 case _:
                     raise ValueError
-
         raise ValueError
 
     def cross_validation_error(
@@ -187,11 +187,12 @@ class Pipeline:
     ) -> float:
         """Compute the cross validation error."""
         X, y, error_list = feature_matrix, response_vector, []
-        layer = self.layers[self.static_order[1]]
-        if isinstance(layer, MissingImputation):
-            imputer = layer.compute_imputer(X, y)
-        else:
-            imputer = np.eye(len(y))
+        # layer = self.layers[self.static_order[1]]
+        # if isinstance(layer, MissingImputation):
+        #     imputer = layer.compute_imputer(X, y)
+        # else:
+        #     imputer = np.eye(len(y))
+        imputer = self.load_imputer(X, y)
         y = imputer @ y[~np.isnan(y)]
 
         for mask in cross_validation_masks:
@@ -300,9 +301,24 @@ class Pipeline:
                 )
         return None
 
+    def load_imputer(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+    ) -> np.ndarray:
+        """Compute the imputer matrix."""
+        if self.imputer is None:
+            layer = self.layers[self.static_order[1]]
+            if isinstance(layer, MissingImputation):
+                self.imputer = layer.compute_imputer(feature_matrix, response_vector)
+            else:
+                self.imputer = np.eye(len(response_vector))
+        return self.imputer
+
     def reset_cache(self) -> None:
         """Reset the cache of the Pipeline object."""
         self.cache_quadratic_cross_validation_error = {}
+        self.imputer = None
         for node in self.static_order:
             layer = self.layers[node]
             if isinstance(layer, FeatureSelection | OutlierDetection):
@@ -348,6 +364,17 @@ class PipelineManager:
         self.representeing_index = 0
         self.tuned = False
 
+    # def tune(
+    #     self,
+    #     feature_matrix: np.ndarray,
+    #     response_vector: np.ndarray,
+    #     *,
+    #     num_folds: int = 5,
+    #     max_candidates: int | None = None,
+    #     random_state: int | None = 0,
+    # ) -> None:
+    #     self.tuned = True
+
     def __call__(
         self,
         feature_matrix: np.ndarray,
@@ -375,14 +402,22 @@ class PipelineManager:
         self.X = feature_matrix
 
         node = self.pipelines[self.representeing_index].static_order[1]
-        if node.type == "missing_imputation":
+        if node.type == "missing_imputation" and np.any(np.isnan(response_vector)):
             self.missing_imputation_method = node.method
-            layer = self.pipelines[self.representeing_index].layers[node]
-            assert isinstance(layer, MissingImputation)
-            self.imputer = layer.compute_imputer(feature_matrix, response_vector)
         else:
             self.missing_imputation_method = "none"
-            self.imputer = np.eye(len(response_vector))
+        self.imputer = self.pipelines[self.representeing_index].load_imputer(
+            feature_matrix,
+            response_vector,
+        )
+        # if node.type == "missing_imputation":
+        #     self.missing_imputation_method = node.method
+        #     layer = self.pipelines[self.representeing_index].layers[node]
+        #     assert isinstance(layer, MissingImputation)
+        #     self.imputer = layer.compute_imputer(feature_matrix, response_vector)
+        # else:
+        #     self.missing_imputation_method = "none"
+        #     self.imputer = np.eye(len(response_vector))
 
         X, y = feature_matrix, response_vector
         if sigma is None:
@@ -462,6 +497,7 @@ class PipelineManager:
             set(M) == set(self.M)
             and set(O) == set(self.O)
             and method == self.missing_imputation_method
+            # np.allclose(self.imputer, imputer)
         )
 
     def reset_cache(self) -> None:
