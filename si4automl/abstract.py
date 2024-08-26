@@ -7,23 +7,47 @@ from graphlib import TopologicalSorter
 from typing import ClassVar, Literal
 
 
-@dataclass
-class Config:
-    """A class for the configuration of the node of the data analysis pipeline."""
+@dataclass(frozen=True)
+class Node:
+    """A class for the node of the data analysis pipeline."""
 
-    name: str
-    parameters: float | list[int] | list[float] | None
+    type: Literal[
+        "start",
+        "missing_imputation",
+        "feature_selection",
+        "outlier_detection",
+        "index_operation",
+        "feature_extraction",
+        "outlier_removal",
+        "end",
+    ]
+    method: str = ""
+    parameters: frozenset[float] | frozenset[int] | None = None
+    count: int | None = None
 
-    def __post_init__(self) -> None:
-        """Post-initialize the Config object."""
-        if self.parameters is None or isinstance(self.parameters, list):
-            self.parameters_ = self.parameters
-        else:
-            self.parameters_ = [self.parameters]
+    @property
+    def name(self) -> str:
+        """Return the name of the node."""
+        if self.method == "":
+            if self.count is None:
+                return f"{self.type}"
+            return f"{self.type}_{self.count}"
+        return f"{self.method}_{self.count}"
 
-    # def entities(self) -> list[float] | list[int] | None:
-    #     """Return the entities of the node."""
-    #     return self.parameters_
+
+# @dataclass
+# class Config:
+#     """A class for the configuration of the node of the data analysis pipeline."""
+
+#     name: str
+#     parameters: float | list[int] | list[float] | None
+
+#     def __post_init__(self) -> None:
+#         """Post-initialize the Config object."""
+#         if self.parameters is None or isinstance(self.parameters, list):
+#             self.parameters = self.parameters
+#         else:
+#             self.parameters = [self.parameters]
 
 
 class Structure:
@@ -31,14 +55,15 @@ class Structure:
 
     def __init__(self) -> None:
         """Initialize the Structure object."""
-        self.graph: dict[str, set[str]] = {}
-        self.configs: dict[str, Config] = {"start": Config("start", None)}
-        self.current_node = "start"
+        self.graph: dict[Node, set[Node]] = {}
+        # self.configs: dict[Node, Config] = {Node("start"): Config("start", None)}
+        self.current_node = Node("start")
 
-    def update(self, node: str, config: Config) -> None:
+    # def update(self, node: Node, config: Config) -> None:
+    def update(self, node: Node) -> None:
         """Update the structure of the data analysis pipeline."""
         self.graph.setdefault(node, set()).add(self.current_node)
-        self.configs[node] = config
+        # self.configs[node] = config
         self.current_node = node
 
     def __or__(self, other: Structure) -> Structure:
@@ -50,7 +75,7 @@ class Structure:
                 key,
                 set(),
             )
-        structure.configs = {**self.configs, **other.configs}
+        # structure.configs = {**self.configs, **other.configs}
         structure.current_node = (
             self.current_node
             if self.graph.keys() >= other.graph.keys()
@@ -99,7 +124,7 @@ class DetectedOutliers:
 class IndexOperationConstructor:
     """A class for constructing the abstract index operation."""
 
-    counter: ClassVar[int] = 0
+    counter: ClassVar[dict[str, int]] = {}
 
     def __init__(self) -> None:
         """Initialize the IndexOperationConstructor object."""
@@ -117,15 +142,21 @@ class IndexOperationConstructor:
         """Perform the index operation on the selected features or detected outliers."""
         assert all(type(inputs[0]) is type(input_) for input_ in inputs)
 
-        node = f"index_operation_{IndexOperationConstructor.counter}"
-        config = Config(name, None)
+        node = Node(
+            "index_operation",
+            name,
+            None,
+            IndexOperationConstructor.counter.get(name, 0),
+        )
+        # config = Config(name, None)
 
         structure = inputs[0].structure
         for input_ in inputs:
-            input_.structure.update(node, config)
+            input_.structure.update(node)  # , config)
             structure = structure | input_.structure
 
-        IndexOperationConstructor.counter += 1
+        IndexOperationConstructor.counter.setdefault(name, 0)
+        IndexOperationConstructor.counter[name] += 1
 
         if "features" in name:
             return SelectedFeatures(structure)
@@ -137,37 +168,35 @@ class IndexOperationConstructor:
 class FeatureExtractionConstructor:
     """A class for constructing the abstract feature extraction."""
 
-    counter: ClassVar[int] = 0
+    count: ClassVar[int] = 0
 
     def __init__(self) -> None:
         """Initialize the FeatureExtractionConstructor object."""
 
     def __call__(
         self,
-        name: str,
         feature_matrix: FeatureMatrix,
         selected_features: SelectedFeatures,
     ) -> FeatureMatrix:
         """Perform the feature extraction on the feature matrix based on the selected features."""
         structure = feature_matrix.structure | selected_features.structure
-        node = f"feature_extraction_{FeatureExtractionConstructor.counter}"
-        config = Config(name, None)
-        structure.update(node, config)
-        FeatureExtractionConstructor.counter += 1
+        node = Node("feature_extraction", count=FeatureExtractionConstructor.count)
+        # config = Config("feature_selection", None)
+        structure.update(node)  # , config)
+        FeatureExtractionConstructor.count += 1
         return FeatureMatrix(structure)
 
 
 class OutlierRemovalConstructor:
     """A class for constructing the abstract outlier removal."""
 
-    counter: ClassVar[int] = 0
+    count: ClassVar[int] = 0
 
     def __init__(self) -> None:
         """Initialize the OutlierRemovalConstructor object."""
 
     def __call__(
         self,
-        name: str,
         feature_matrix: FeatureMatrix,
         response_vector: ResponseVector,
         detected_outliers: DetectedOutliers,
@@ -178,17 +207,17 @@ class OutlierRemovalConstructor:
             | response_vector.structure
             | detected_outliers.structure
         )
-        node = f"outlier_removal_{OutlierRemovalConstructor.counter}"
-        config = Config(name, None)
-        structure.update(node, config)
-        OutlierRemovalConstructor.counter += 1
+        node = Node("outlier_removal", count=OutlierRemovalConstructor.count)
+        # config = Config("outlier_removal", None)
+        structure.update(node)  # , config)
+        OutlierRemovalConstructor.count += 1
         return FeatureMatrix(structure), ResponseVector(structure)
 
 
 class FeatureSelectionConstructor:
     """A class for constructing the abstract feature selection."""
 
-    counter: ClassVar[int] = 0
+    counter: ClassVar[dict[str, int]] = {}
 
     def __init__(self) -> None:
         """Initialize the FeatureSelectionConstructor object."""
@@ -202,10 +231,18 @@ class FeatureSelectionConstructor:
     ) -> SelectedFeatures:
         """Perform the feature selection on the feature matrix and response vector."""
         structure = feature_matrix.structure | response_vector.structure
-        node = f"feature_selection_{FeatureSelectionConstructor.counter}"
-        config = Config(name, parameters)
-        structure.update(node, config)
-        FeatureSelectionConstructor.counter += 1
+        parameters = parameters if isinstance(parameters, list) else [parameters]
+        node = Node(
+            "feature_selection",
+            name,
+            frozenset(parameters),
+            FeatureSelectionConstructor.counter.get(name, 0),
+        )
+        # config = Config(name, parameters)
+        structure.update(node)  # , config)
+
+        FeatureSelectionConstructor.counter.setdefault(name, 0)
+        FeatureSelectionConstructor.counter[name] += 1
         return SelectedFeatures(structure)
 
 
@@ -242,7 +279,6 @@ def extract_features(
 ) -> FeatureMatrix:
     """Perform the feature extraction on the feature matrix based on the selected features."""
     return FeatureExtractionConstructor()(
-        "extract_features",
         feature_matrix,
         selected_features,
     )
@@ -255,7 +291,6 @@ def remove_outliers(
 ) -> tuple[FeatureMatrix, ResponseVector]:
     """Perform the outlier removal on the feature matrix and the response vector based on the detected outliers."""
     return OutlierRemovalConstructor()(
-        "remove_outliers",
         feature_matrix,
         response_vector,
         detected_outliers,
@@ -290,9 +325,23 @@ def stepwise_feature_selection(
     )
 
 
+def lasso(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+    parameters: float | list[float],
+) -> SelectedFeatures:
+    """Perform the lass on the feature matrix and response vector."""
+    return FeatureSelectionConstructor()(
+        "lasso",
+        feature_matrix,
+        response_vector,
+        parameters,
+    )
+
+
 def make_structure(output: SelectedFeatures) -> Structure:
     """Make the Structure object of defined data analysis pipeline."""
     structure = output.structure
-    structure.update("end", Config("end", None))
+    structure.update(Node("end"))  # , Config("end", None))
     structure.make_sorted_node_list()
     return structure
