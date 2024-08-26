@@ -44,14 +44,6 @@ class Pipeline:
         ] = {}
         self._validate()
 
-    def reset_cache(self) -> None:
-        """Reset the cache of the Pipeline object."""
-        self.cache_quadratic_cross_validation_error = {}
-        for node in self.static_order:
-            layer = self.layers[node]
-            if isinstance(layer, FeatureSelection | OutlierDetection):
-                layer.reset_cache()
-
     def _validate(self) -> None:
         """Validate the Pipeline object."""
         assert self.static_order[0].type == "start"
@@ -79,20 +71,6 @@ class Pipeline:
                     assert isinstance(self.layers[node], IndexOperation)
                 case _:
                     raise ValueError
-
-    def _load_quadratic_cross_validation_error(
-        self,
-        mask_id: int,
-        z: float,
-    ) -> tuple[list[float], float, float] | None:
-        self.cache_quadratic_cross_validation_error.setdefault(mask_id, {})
-        for interval in self.cache_quadratic_cross_validation_error[mask_id]:
-            if interval[0] <= z <= interval[1]:
-                return (
-                    self.cache_quadratic_cross_validation_error[mask_id][interval],
-                    *interval,
-                )
-        return None
 
     def __call__(
         self,
@@ -308,6 +286,28 @@ class Pipeline:
             np.min(u_list).item(),
         )
 
+    def _load_quadratic_cross_validation_error(
+        self,
+        mask_id: int,
+        z: float,
+    ) -> tuple[list[float], float, float] | None:
+        self.cache_quadratic_cross_validation_error.setdefault(mask_id, {})
+        for interval in self.cache_quadratic_cross_validation_error[mask_id]:
+            if interval[0] <= z <= interval[1]:
+                return (
+                    self.cache_quadratic_cross_validation_error[mask_id][interval],
+                    *interval,
+                )
+        return None
+
+    def reset_cache(self) -> None:
+        """Reset the cache of the Pipeline object."""
+        self.cache_quadratic_cross_validation_error = {}
+        for node in self.static_order:
+            layer = self.layers[node]
+            if isinstance(layer, FeatureSelection | OutlierDetection):
+                layer.reset_cache()
+
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""
         edge_list = []
@@ -347,11 +347,6 @@ class PipelineManager:
             self.pipelines.append(pipeline)
         self.representeing_index = 0
         self.tuned = False
-
-    def reset_cache(self) -> None:
-        """Reset the cache of the all pipelines."""
-        for pipeline in self.pipelines:
-            pipeline.reset_cache()
 
     def __call__(
         self,
@@ -469,20 +464,10 @@ class PipelineManager:
             and method == self.missing_imputation_method
         )
 
-    def _estimate_standard_deviation(
-        self,
-        feature_matrix: np.ndarray,
-        response_vector: np.ndarray,
-        imputer: np.ndarray,
-    ) -> float:
-        """Estimate the standard deviation."""
-        X, y = feature_matrix, response_vector
-        residuals = (
-            (np.eye(X.shape[0]) - X @ np.linalg.inv(X.T @ X) @ X.T)
-            @ imputer
-            @ y[~np.isnan(y)]
-        )
-        return np.std(residuals, ddof=X.shape[1])
+    def reset_cache(self) -> None:
+        """Reset the cache of the all pipelines."""
+        for pipeline in self.pipelines:
+            pipeline.reset_cache()
 
     def __str__(self) -> str:
         """Return the string representation of the PipelineManager object."""
