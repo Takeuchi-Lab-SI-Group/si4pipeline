@@ -22,8 +22,8 @@ class OutlierDetection:
         """Perform the outlier detection."""
         raise NotImplementedError
 
-    def reset_intervals(self) -> None:
-        """Reset the intervals to execute the selective inference."""
+    def reset_cache(self) -> None:
+        """Reset the cache to execute the selective inference."""
         self.intervals: dict[
             int,
             dict[tuple[float, float], tuple[list[int], list[int]]],

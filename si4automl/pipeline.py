@@ -34,8 +34,19 @@ class Pipeline:
         self.graph = graph
         self.layers = layers
 
-        self.cache_cv_error: dict[int, list[float]] = {}
+        self.cache_quadratic_cross_validation_error: dict[
+            int,
+            dict[tuple[float, float], list[float]],
+        ] = {}
         self._validate()
+
+    def _reset_cache(self) -> None:
+        """Reset the cache of the Pipeline object."""
+        self.cache_quadratic_cross_validation_error = {}
+        for node in self.static_order:
+            layer = self.layers[node]
+            if isinstance(layer, FeatureSelection | OutlierDetection):
+                layer.reset_cache()
 
     def _validate(self) -> None:
         """Validate the Pipeline object."""
@@ -64,6 +75,20 @@ class Pipeline:
                     assert isinstance(self.layers[node], IndexOperation)
                 case _:
                     raise ValueError
+
+    def _load_quadratic_cross_validation_error(
+        self,
+        mask_id: int,
+        z: float,
+    ) -> tuple[list[float], float, float] | None:
+        self.cache_quadratic_cross_validation_error.setdefault(mask_id, {})
+        for interval in self.cache_quadratic_cross_validation_error[mask_id]:
+            if interval[0] <= z <= interval[1]:
+                return (
+                    self.cache_quadratic_cross_validation_error[mask_id][interval],
+                    *interval,
+                )
+        return None
 
     def __call__(
         self,
@@ -124,7 +149,7 @@ class Pipeline:
         a: np.ndarray,
         b: np.ndarray,
         z: float,
-        mask_id: int = -1,
+        mask_id: int,
     ) -> tuple[list[int], list[int], float, float]:
         """Compute the selection event."""
         outputs: dict[Node, tuple[list[int], list[int], float, float]] = {}
@@ -171,6 +196,113 @@ class Pipeline:
                     raise ValueError
 
         raise ValueError
+
+    def cross_validation_error(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        cross_validation_masks: list[list[int]],
+    ) -> float:
+        """Compute the cross validation error."""
+        X, y, error_list = feature_matrix, response_vector, []
+        layer = self.layers[self.static_order[1]]
+        if isinstance(layer, MissingImputation):
+            imputer = layer.compute_imputer(X, y)
+        else:
+            imputer = np.eye(len(y))
+        y = imputer @ y[~np.isnan(y)]
+
+        for mask in cross_validation_masks:
+            X_tr, y_tr = X[mask], y[mask]
+            X_val, y_val = np.delete(X, mask, 0), np.delete(y, mask)
+            M, O = self(X_tr, y_tr)
+            X_tr, y_tr = np.delete(X_tr, O, 0), np.delete(y_tr, O)
+            if len(M) == 0:
+                error_list.append(np.mean(y_val**2))
+            else:
+                y_error = (
+                    y_val
+                    - X_val[:, M]
+                    @ np.linalg.inv(X_tr[:, M].T @ X_tr[:, M])
+                    @ X_tr[:, M].T
+                    @ y_tr
+                )
+                error_list.append(np.mean(y_error**2))
+        return np.mean(error_list).item()
+
+    def quadratic_cross_validation_error(
+        self,
+        X: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        cross_validation_masks: list[list[int]],
+    ) -> tuple[list[float], float, float]:
+        """Compute the cross validation error in the quadratic form."""
+        assert X.shape[0] == a.shape[0] == b.shape[0]
+        l_list, u_list, quadratic_list = [], [], []
+        for mask_id, mask in enumerate(cross_validation_masks):
+            load = self._load_quadratic_cross_validation_error(mask_id, z)
+            if load is not None:
+                quadratic, l, u = load
+                quadratic_list.append(quadratic)
+                l_list.append(l)
+                u_list.append(u)
+                continue
+
+            X_tr, a_tr, b_tr = X[mask], a[mask], b[mask]
+            (
+                selected_features_cv,
+                detected_outliers_cv,
+                l,
+                u,
+            ) = self.selection_event(X_tr, a_tr, b_tr, z, mask_id)
+            l_list.append(l)
+            u_list.append(u)
+
+            X_tr = np.delete(X_tr, detected_outliers_cv, 0)
+            a_tr = np.delete(a_tr, detected_outliers_cv)
+            b_tr = np.delete(b_tr, detected_outliers_cv)
+
+            X_val = np.delete(X, mask, 0)
+            a_val = np.delete(a, mask)
+            b_val = np.delete(b, mask)
+            num = X_val.shape[0]
+
+            if len(selected_features_cv) == 0:
+                quadratic = [
+                    b_val @ b_val / num,
+                    2 * b_val @ a_val / num,
+                    a_val @ a_val / num,
+                ]
+            else:
+                F = (
+                    X_tr[:, selected_features_cv]
+                    @ np.linalg.inv(
+                        X_tr[:, selected_features_cv].T @ X_tr[:, selected_features_cv],
+                    )
+                    @ X_val[:, selected_features_cv].T
+                )
+                G = F @ F.T
+                alpha = b_val @ b_val - 2 * b_tr @ F @ b_val + b_tr @ G @ b_tr
+                beta = (
+                    2 * b_val @ a_val
+                    - 2 * b_tr @ F @ a_val
+                    - 2 * a_tr @ F @ b_val
+                    + 2 * a_tr @ G @ b_tr
+                )
+                gamma = a_val @ a_val - 2 * a_tr @ F @ a_val + a_tr @ G @ a_tr
+                quadratic = [alpha / num, beta / num, gamma / num]
+            quadratic_list.append(quadratic)
+            self.cache_quadratic_cross_validation_error.setdefault(mask_id, {})[
+                (l, u)
+            ] = quadratic
+
+        return (
+            np.mean(quadratic_list, axis=0).tolist(),
+            np.max(l_list).item(),
+            np.min(u_list).item(),
+        )
 
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""

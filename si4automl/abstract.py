@@ -55,7 +55,7 @@ class Structure:
 
     def __init__(self) -> None:
         """Initialize the Structure object."""
-        self.graph: dict[Node, set[Node]] = {}
+        self.graph: dict[Node, set[Node]] = {Node("start"): set()}
         # self.configs: dict[Node, Config] = {Node("start"): Config("start", None)}
         self.current_node = Node("start")
 
