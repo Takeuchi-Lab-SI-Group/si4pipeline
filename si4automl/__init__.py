@@ -6,14 +6,18 @@ from si4automl.abstract import (
     definite_regression_imputation,
     dffits,
     euclidean_imputation,
+    extract_features,
+    intersection,
     lasso,
     make_dataset,
     make_structure,
     manhattan_imputation,
     marginal_screening,
     mean_value_imputation,
+    remove_outliers,
     soft_ipod,
     stepwise_feature_selection,
+    union,
 )
 from si4automl.pipeline import Pipeline, PipelineManager
 

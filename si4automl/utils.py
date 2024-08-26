@@ -35,11 +35,11 @@ from si4automl.outlier_detection import (
 def conver_entities(
     node: Node,
 ) -> (
-    list[None]
-    | list[MissingImputation]
+    list[MissingImputation]
     | list[FeatureSelection]
     | list[OutlierDetection]
     | list[IndexOperation]
+    | list[None]
 ):
     """Convert the node to the entities."""
     match node.type:

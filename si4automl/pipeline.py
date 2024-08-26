@@ -1,9 +1,13 @@
 """Module containing entity for the data analysis pipeline and manager of it."""
 
 from itertools import product
+from typing import cast
 
 from si4automl.abstract import Node, Structure
 from si4automl.feature_selection import FeatureSelection
+from si4automl.index_operation import IndexOperation
+from si4automl.missing_imputation import MissingImputation
+from si4automl.outlier_detection import OutlierDetection
 from si4automl.utils import conver_entities
 
 
@@ -14,7 +18,14 @@ class Pipeline:
         self,
         static_order: list[Node],
         graph: dict[Node, set[Node]],
-        layers: dict[Node, None | FeatureSelection],
+        layers: dict[
+            Node,
+            MissingImputation
+            | FeatureSelection
+            | OutlierDetection
+            | IndexOperation
+            | None,
+        ],
     ) -> None:
         """Initialize the Pipeline object."""
         self.static_order = static_order
@@ -44,12 +55,21 @@ class PipelineManager:
         layers_list = list(
             product(*[conver_entities(node) for node in self.static_order]),
         )
-
-        for layers in layers_list:
+        for layers_ in layers_list:
+            layers_ = cast(
+                tuple[
+                    MissingImputation
+                    | FeatureSelection
+                    | OutlierDetection
+                    | IndexOperation
+                    | None
+                ],
+                layers_,
+            )
             pipeline = Pipeline(
                 static_order=self.static_order,
                 graph=self.graph,
-                layers=dict(zip(self.static_order, layers, strict=True)),
+                layers=dict(zip(self.static_order, layers_, strict=True)),
             )
             self.pipelines.append(pipeline)
         self.representeing_index = 0
