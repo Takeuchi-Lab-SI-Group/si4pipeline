@@ -1,30 +1,16 @@
+"""Module containing outlier detection methods."""
+
 import numpy as np
-import sklearn.linear_model as lm
-from sicore import polytope_to_interval
-from source.base_component import FeatureMatrix, ResponseVector, DetectedOutliers
+import sklearn.linear_model as lm  # type: ignore[import]
+from sicore import polytope_below_zero  # type: ignore[import]
 
 
 class OutlierDetection:
-    instance_counter = dict()
+    """A class for outlier detection methods."""
 
-    def __init__(
-        self,
-        name: str,
-        parameters,
-        candidates,
-    ):
-        self.parameters = parameters
-        self.candidates = candidates
-        OutlierDetection.instance_counter.setdefault(name, 0)
-        self.name = f"{name}_{OutlierDetection.instance_counter[name]}"
-        OutlierDetection.instance_counter[name] += 1
-
-    def __call__(
-        self, feature_matrix: FeatureMatrix, response_vector: ResponseVector
-    ) -> DetectedOutliers:
-        pl_structure = feature_matrix.pl_structure | response_vector.pl_structure
-        pl_structure.update(self.name, self)
-        return DetectedOutliers(pl_structure)
+    def __init__(self, parameter: float) -> None:
+        """Initialize the OutlierDetection object."""
+        self.parameter = parameter
 
     def detect_outliers(
         self,
@@ -32,36 +18,30 @@ class OutlierDetection:
         response_vector: np.ndarray,
         selected_features: list[int],
         detected_outliers: list[int],
-    ) -> np.ndarray:
+    ) -> list[int]:
+        """Perform the outlier detection."""
         raise NotImplementedError
 
-    def reset_intervals(self):
-        self.intervals = dict()
-        self.cv_intervals = dict()
+    def reset_intervals(self) -> None:
+        """Reset the intervals to execute the selective inference."""
+        self.intervals: dict[
+            int,
+            dict[tuple[float, float], tuple[list[int], list[int]]],
+        ] = {}
 
     def load_intervals(
         self,
         z: float,
         l: float,
         u: float,
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
-    ):
-        if candidate_id is None and mask_id is None:
-            self.intervals.setdefault(None, dict())
-            items = self.intervals[None].items()
-        elif candidate_id is not None and mask_id is not None:
-            self.intervals.setdefault(candidate_id, dict())
-            self.intervals[candidate_id].setdefault(mask_id, dict())
-            items = self.intervals[candidate_id][mask_id].items()
-        else:
-            raise ValueError("candidate_id and mask_id must be both None or not None")
-
-        for interval, indexes in items:
+        mask_id: int = -1,
+    ) -> tuple[list[int], list[int], float, float] | None:
+        """Load the intervals to execute the selective inference."""
+        for interval, indexes in self.intervals.setdefault(mask_id, {}).items():
             if interval[0] < z < interval[1]:
                 M, O = indexes
-                l = np.max([l, interval[0]])
-                u = np.min([u, interval[1]])
+                l = np.max([l, interval[0]]).item()
+                u = np.min([u, interval[1]]).item()
                 return M, O, l, u
         return None
 
@@ -71,15 +51,10 @@ class OutlierDetection:
         u: float,
         M: list[int],
         O: list[int],
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
-    ):
-        if candidate_id is None and mask_id is None:
-            self.intervals[None][(l, u)] = (M, O)
-        elif candidate_id is not None and mask_id is not None:
-            self.intervals[candidate_id][mask_id][(l, u)] = (M, O)
-        else:
-            raise ValueError("candidate_id and mask_id must be both None or not None")
+        mask_id: int = -1,
+    ) -> None:
+        """Save the intervals to execute the selective inference."""
+        self.intervals[mask_id][(l, u)] = (M, O)
 
     def perform_si(
         self,
@@ -91,15 +66,18 @@ class OutlierDetection:
         detected_outliers: list[int],
         l: float,
         u: float,
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
+        mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
+        """Perform the selective inference."""
         raise NotImplementedError
 
 
 class CookDistance(OutlierDetection):
-    def __init__(self, name="cook_distance", parameters=None, candidates=None):
-        super().__init__(name, parameters, candidates)
+    """A class for cook distance method."""
+
+    def __init__(self, parameter: float) -> None:
+        """Initialize the CookDistance object."""
+        super().__init__(parameter)
 
     def detect_outliers(
         self,
@@ -108,6 +86,7 @@ class CookDistance(OutlierDetection):
         selected_features: list[int],
         detected_outliers: list[int],
     ) -> list[int]:
+        """Perform the outlier detection."""
         X, y = feature_matrix, response_vector
         M, O = selected_features, detected_outliers
 
@@ -125,7 +104,7 @@ class CookDistance(OutlierDetection):
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
-        threshold = self.parameters / n  # threshold value
+        threshold = self.parameter / n  # threshold value
 
         # outlier detection
         for i in range(n):
@@ -144,8 +123,7 @@ class CookDistance(OutlierDetection):
                 outlier.append(i)
 
         O_ = [num_outlier_data[i] for i in outlier]
-        O = O + O_
-        return O
+        return O + O_
 
     def perform_si(
         self,
@@ -157,10 +135,10 @@ class CookDistance(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
+        mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
-        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        """Perform the selective inference."""
+        results = self.load_intervals(z, l, u, mask_id)
         if results is not None:
             return results
 
@@ -182,7 +160,7 @@ class CookDistance(OutlierDetection):
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
-        threshold = self.parameters / n  # threshold value
+        threshold = self.parameter / n  # threshold value
 
         for i in range(n):
             ej = np.zeros((n, 1))
@@ -205,33 +183,36 @@ class CookDistance(OutlierDetection):
             ej[i] = 1
             hi = hat_matrix[i][i]
             H_1 = ((n - p) * hi) * Px @ ej @ ej.T @ Px
-            H_2 = ((self.parameters * p * (1 - hi) ** 2) / n) * Px
+            H_2 = ((self.parameter * p * (1 - hi) ** 2) / n) * Px
             H = H_1 - H_2
 
             if i in outlier:
                 H = -H
 
-            intervals = polytope_to_interval(a, b, H, np.zeros(n), 0)
+            intervals = polytope_below_zero(a, b, H, np.zeros(n), 0)
             for left, right in intervals:
                 if left < z < right:
                     l_list.append(left)
                     u_list.append(right)
                     break
 
-        l = np.max(l_list)
-        u = np.min(u_list)
+        l = np.max(l_list).item()
+        u = np.min(u_list).item()
         assert l < z < u, "l < z < u is not satisfied"
 
         O_ = [num_outlier_data[i] for i in outlier]
         O = O + O_
 
-        self.save_intervals(l, u, M, O, candidate_id, mask_id)
+        self.save_intervals(l, u, M, O, mask_id)
         return M, O, l, u
 
 
 class Dffits(OutlierDetection):
-    def __init__(self, name="dffits", parameters=None, candidates=None):
-        super().__init__(name, parameters, candidates)
+    """A class for dffits method."""
+
+    def __init__(self, parameter: float) -> None:
+        """Initialize the Dffits object."""
+        super().__init__(parameter)
 
     def detect_outliers(
         self,
@@ -240,6 +221,7 @@ class Dffits(OutlierDetection):
         selected_features: list[int],
         detected_outliers: list[int],
     ) -> list[int]:
+        """Perform the outlier detection."""
         X, y = feature_matrix, response_vector
         M, O = selected_features, detected_outliers
 
@@ -257,7 +239,7 @@ class Dffits(OutlierDetection):
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
-        threshold = self.parameters * p / (n - p)
+        threshold = self.parameter * p / (n - p)
 
         for i in range(n):
             ej = np.zeros((n, 1))
@@ -276,8 +258,7 @@ class Dffits(OutlierDetection):
                 outlier.append(i)
 
         O_ = [num_outlier_data[i] for i in outlier]
-        O = O + O_
-        return O
+        return O + O_
 
     def perform_si(
         self,
@@ -289,10 +270,10 @@ class Dffits(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
+        mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
-        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        """Perform the selective inference."""
+        results = self.load_intervals(z, l, u, mask_id)
         if results is not None:
             return results
 
@@ -315,7 +296,7 @@ class Dffits(OutlierDetection):
         # dffits
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
-        threshold = self.parameters * p / (n - p)
+        threshold = self.parameter * p / (n - p)
 
         for i in range(n):
             ej = np.zeros((n, 1))
@@ -339,36 +320,39 @@ class Dffits(OutlierDetection):
             ej[i] = 1
             hi = hat_matrix[i][i]
             H_11 = ((hi * (n - p - 1)) / (1 - hi) ** 2) + (
-                (self.parameters * p) / ((n - p) * (1 - hi))
+                (self.parameter * p) / ((n - p) * (1 - hi))
             )
             H_1 = H_11 * Px @ ej @ ej.T @ Px
-            H_2 = ((self.parameters * p) / (n - p)) * Px
+            H_2 = ((self.parameter * p) / (n - p)) * Px
             H = H_1 - H_2
 
             if i in outlier:
                 H = -H
 
-            intervals = polytope_to_interval(a, b, H, np.zeros(n), 0)
+            intervals = polytope_below_zero(a, b, H, np.zeros(n), 0)
             for left, right in intervals:
                 if left < z < right:
                     l_list.append(left)
                     u_list.append(right)
                     break
 
-        l = np.max(l_list)
-        u = np.min(u_list)
+        l = np.max(l_list).item()
+        u = np.min(u_list).item()
         assert l < z < u, "l < z < u is not satisfied"
 
         O_ = [num_outlier_data[i] for i in outlier]
         O = O + O_
 
-        self.save_intervals(l, u, M, O, candidate_id, mask_id)
+        self.save_intervals(l, u, M, O, mask_id)
         return M, O, l, u
 
 
 class SoftIpod(OutlierDetection):
-    def __init__(self, name="soft_ipod", parameters=None, candidates=None):
-        super().__init__(name, parameters, candidates)
+    """A class for soft ipod method."""
+
+    def __init__(self, parameter: float) -> None:
+        """Initialize the SoftIpod object."""
+        super().__init__(parameter)
 
     def detect_outliers(
         self,
@@ -377,6 +361,7 @@ class SoftIpod(OutlierDetection):
         selected_features: list[int],
         detected_outliers: list[int],
     ) -> list[int]:
+        """Perform the outlier detection."""
         X, y = feature_matrix, response_vector
         M, O = selected_features, detected_outliers
 
@@ -388,7 +373,7 @@ class SoftIpod(OutlierDetection):
         num_outlier_data = [i for i in num_data if i not in O]
 
         # soft-ipod
-        outlier = []
+        # outlier: list[int] = []
         n = X.shape[0]
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
@@ -396,14 +381,16 @@ class SoftIpod(OutlierDetection):
         Pxy = Px @ y
 
         lasso = lm.Lasso(
-            alpha=self.parameters, fit_intercept=False, max_iter=5000, tol=1e-10
+            alpha=self.parameter,
+            fit_intercept=False,
+            max_iter=5000,
+            tol=1e-10,
         )
         lasso.fit(Px, Pxy)
         outlier = np.where(lasso.coef_ != 0)[0]
 
         O_ = [num_outlier_data[i] for i in outlier]
-        O = O + O_
-        return O
+        return O + O_
 
     def perform_si(
         self,
@@ -415,10 +402,10 @@ class SoftIpod(OutlierDetection):
         detected_outliers: list[int],
         l: float,
         u: float,
-        candidate_id: int | None = None,
-        mask_id: int | None = None,
+        mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
-        results = self.load_intervals(z, l, u, candidate_id, mask_id)
+        """Perform the selective inference."""
+        results = self.load_intervals(z, l, u, mask_id)
         if results is not None:
             return results
 
@@ -431,17 +418,20 @@ class SoftIpod(OutlierDetection):
 
         a, b = np.delete(a, O), np.delete(b, O)
 
-        num_data = list(range(X.shape[0]))
+        num_data, n = list(range(X.shape[0])), X.shape[0]
         num_outlier_data = [i for i in num_data if i not in O]
 
-        n = X.shape[0]
+        # n = X.shape[0]
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
         Pxy = Px @ yz
 
         lasso = lm.Lasso(
-            alpha=self.parameters, fit_intercept=False, max_iter=5000, tol=1e-10
+            alpha=self.parameter,
+            fit_intercept=False,
+            max_iter=5000,
+            tol=1e-10,
         )
         lasso.fit(Px, Pxy)
         outlier = np.where(lasso.coef_ != 0)[0].tolist()
@@ -458,10 +448,10 @@ class SoftIpod(OutlierDetection):
             @ X_caron_inactive.T
         )
         X_caron_inactive_plus = X_caron_inactive @ np.linalg.inv(
-            X_caron_inactive.T @ X_caron_inactive
+            X_caron_inactive.T @ X_caron_inactive,
         )
 
-        A0_plus = X_caron_active.T @ Px_caron_inactive_perp @ Px / (self.parameters * n)
+        A0_plus = X_caron_active.T @ Px_caron_inactive_perp @ Px / (self.parameter * n)
         A0_minus = -A0_plus
 
         b0_plus = (
@@ -479,7 +469,7 @@ class SoftIpod(OutlierDetection):
         )
         b1 = (
             -n
-            * self.parameters
+            * self.parameter
             * np.diag(signs)
             @ np.linalg.inv(X_caron_inactive.T @ X_caron_inactive)
             @ signs
@@ -496,10 +486,10 @@ class SoftIpod(OutlierDetection):
             right_list += right
 
         l_list, u_list = [l], [u]
-        for left, right in zip(left_list, right_list):
+        for left, right in zip(left_list, right_list, strict=False):
             if np.around(left, 5) == 0:
                 if right <= 0:
-                    raise ValueError("l must be less than u")
+                    raise ValueError  # l must be less than u
                 continue
             term = right / left
             if left > 0:
@@ -507,30 +497,12 @@ class SoftIpod(OutlierDetection):
             else:
                 l_list.append(term)
 
-        l = np.max(l_list)
-        u = np.min(u_list)
+        l, u = np.max(l_list).item(), np.min(u_list).item()
         assert l < z < u, "l < z < u is not satisfied"
 
-        O_ = [num_outlier_data[i] for i in outlier]
-        O = O + O_
+        # O_ = [num_outlier_data[i] for i in outlier]
+        # O = O + O_
+        O = O + [num_outlier_data[i] for i in outlier]
 
-        self.save_intervals(l, u, M, O, candidate_id, mask_id)
+        self.save_intervals(l, u, M, O, mask_id)
         return M, O, l, u
-
-
-def cook_distance(feature_matrix, response_vector, parameters=3.0, candidates=None):
-    return CookDistance(parameters=parameters, candidates=candidates)(
-        feature_matrix, response_vector
-    )
-
-
-def dffits(feature_matrix, response_vector, parameters=2.0, candidates=None):
-    return Dffits(parameters=parameters, candidates=candidates)(
-        feature_matrix, response_vector
-    )
-
-
-def soft_ipod(feature_matrix, response_vector, parameters=0.02, candidates=None):
-    return SoftIpod(parameters=parameters, candidates=candidates)(
-        feature_matrix, response_vector
-    )
