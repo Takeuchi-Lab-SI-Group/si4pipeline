@@ -34,6 +34,37 @@ class Pipeline:
         self.graph = graph
         self.layers = layers
 
+        self.cache_cv_error: dict[int, list[float]] = {}
+        self._validate()
+
+    def _validate(self) -> None:
+        """Validate the Pipeline object."""
+        assert self.static_order[0].type == "start"
+        assert self.static_order[-1].type == "end"
+        for node in self.static_order:
+            parents = list(self.graph[node])
+            match node.type:
+                case "start":
+                    assert not parents
+                case "end":
+                    assert len(parents) == 1
+                case "feature_extraction" | "outlier_removal":
+                    assert len(parents) == 1
+                case "missing_imputation":
+                    assert len(parents) == 1
+                    assert isinstance(self.layers[node], MissingImputation)
+                case "feature_selection":
+                    assert len(parents) == 1
+                    assert isinstance(self.layers[node], FeatureSelection)
+                case "outlier_detection":
+                    assert len(parents) == 1
+                    assert isinstance(self.layers[node], OutlierDetection)
+                case "index_operation":
+                    assert len(parents) >= 1
+                    assert isinstance(self.layers[node], IndexOperation)
+                case _:
+                    raise ValueError
+
     def __call__(
         self,
         feature_matrix: np.ndarray,
@@ -43,20 +74,16 @@ class Pipeline:
         outputs: dict[Node, tuple[list[int], list[int]]] = {}
         for node in self.static_order:
             layer = self.layers[node]
-            if node.type != "start":
-                parents = list(self.graph[node])
+            parents = list(self.graph[node])
             match node.type:
                 case "start":
                     outputs[node] = (list(range(feature_matrix.shape[1])), [])
                 case "end":
-                    assert len(parents) == 1
                     return outputs[parents[0]]
                 case "feature_extraction" | "outlier_removal":
-                    assert len(parents) == 1
                     outputs[node] = outputs[parents[0]]
                 case "missing_imputation":
                     assert isinstance(layer, MissingImputation)
-                    assert len(parents) == 1
                     response_vector = layer.impute_missing(
                         feature_matrix,
                         response_vector,
@@ -64,7 +91,6 @@ class Pipeline:
                     outputs[node] = outputs[parents[0]]
                 case "feature_selection":
                     assert isinstance(layer, FeatureSelection)
-                    assert len(parents) == 1
                     selected_features, detected_outliers = outputs[parents[0]]
                     selected_features = layer.select_features(
                         feature_matrix,
@@ -75,7 +101,6 @@ class Pipeline:
                     outputs[node] = (selected_features, detected_outliers)
                 case "outlier_detection":
                     assert isinstance(layer, OutlierDetection)
-                    assert len(parents) == 1
                     selected_features, detected_outliers = outputs[parents[0]]
                     detected_outliers = layer.detect_outliers(
                         feature_matrix,
