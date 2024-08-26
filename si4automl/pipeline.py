@@ -3,6 +3,8 @@
 from itertools import product
 from typing import cast
 
+import numpy as np
+
 from si4automl.abstract import Node, Structure
 from si4automl.feature_selection import FeatureSelection
 from si4automl.index_operation import IndexOperation
@@ -32,6 +34,65 @@ class Pipeline:
         self.graph = graph
         self.layers = layers
 
+    def __call__(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+    ) -> tuple[list[int], list[int]]:
+        """Perform the data analysis pipeline on the given feature matrix and response vector."""
+        outputs: dict[Node, tuple[list[int], list[int]]] = {}
+        for node in self.static_order:
+            layer = self.layers[node]
+            if node.type != "start":
+                parents = list(self.graph[node])
+            match node.type:
+                case "start":
+                    outputs[node] = (list(range(feature_matrix.shape[1])), [])
+                case "end":
+                    assert len(parents) == 1
+                    return outputs[parents[0]]
+                case "feature_extraction" | "outlier_removal":
+                    assert len(parents) == 1
+                    outputs[node] = outputs[parents[0]]
+                case "missing_imputation":
+                    assert isinstance(layer, MissingImputation)
+                    assert len(parents) == 1
+                    response_vector = layer.impute_missing(
+                        feature_matrix,
+                        response_vector,
+                    )
+                    outputs[node] = outputs[parents[0]]
+                case "feature_selection":
+                    assert isinstance(layer, FeatureSelection)
+                    assert len(parents) == 1
+                    selected_features, detected_outliers = outputs[parents[0]]
+                    selected_features = layer.select_features(
+                        feature_matrix,
+                        response_vector,
+                        selected_features,
+                        detected_outliers,
+                    )
+                    outputs[node] = (selected_features, detected_outliers)
+                case "outlier_detection":
+                    assert isinstance(layer, OutlierDetection)
+                    assert len(parents) == 1
+                    selected_features, detected_outliers = outputs[parents[0]]
+                    detected_outliers = layer.detect_outliers(
+                        feature_matrix,
+                        response_vector,
+                        selected_features,
+                        detected_outliers,
+                    )
+                    outputs[node] = (selected_features, detected_outliers)
+                case "index_operation":
+                    assert isinstance(layer, IndexOperation)
+                    outputs[node] = layer.index_operation(
+                        *[outputs[parent] for parent in parents],
+                    )
+                case _:
+                    raise ValueError
+        raise ValueError
+
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""
         edge_list = []
@@ -51,10 +112,7 @@ class PipelineManager:
         self.graph = structure.graph
 
         self.pipelines = []
-
-        layers_list = list(
-            product(*[conver_entities(node) for node in self.static_order]),
-        )
+        layers_list = product(*[conver_entities(node) for node in self.static_order])
         for layers_ in layers_list:
             layers_ = cast(
                 tuple[
@@ -73,6 +131,16 @@ class PipelineManager:
             )
             self.pipelines.append(pipeline)
         self.representeing_index = 0
+        self.tuned = False
+
+    def __call__(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+    ) -> tuple[list[int], list[int]]:
+        """Perform the representing data analysis pipeline on the given feature matrix and response vector."""
+        assert self.tuned or len(self.pipelines) == 1
+        return self.pipelines[self.representeing_index](feature_matrix, response_vector)
 
     def __str__(self) -> str:
         """Return the string representation of the PipelineManager object."""
