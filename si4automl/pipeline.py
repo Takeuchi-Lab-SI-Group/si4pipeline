@@ -118,6 +118,60 @@ class Pipeline:
                     raise ValueError
         raise ValueError
 
+    def selection_event(
+        self,
+        X: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+        mask_id: int = -1,
+    ) -> tuple[list[int], list[int], float, float]:
+        """Compute the selection event."""
+        outputs: dict[Node, tuple[list[int], list[int], float, float]] = {}
+        for node in self.static_order:
+            layer = self.layers[node]
+            parents = list(self.graph[node])
+            match node.type:
+                case "start":
+                    outputs[node] = (list(range(X.shape[1])), [], -np.inf, np.inf)
+                case "end":
+                    return outputs[parents[0]]
+                case "feature_extraction" | "outlier_removal" | "missing_imputation":
+                    outputs[node] = outputs[parents[0]]
+                case "feature_selection" | "outlier_detection":
+                    assert isinstance(layer, FeatureSelection | OutlierDetection)
+                    selected_features, detected_outliers, l, u = outputs[parents[0]]
+                    outputs[node] = layer.perform_si(
+                        a,
+                        b,
+                        z,
+                        X,
+                        selected_features,
+                        detected_outliers,
+                        l,
+                        u,
+                        mask_id,
+                    )
+                case "index_operation":
+                    assert isinstance(layer, IndexOperation)
+                    selected_features, detected_outliers = layer.index_operation(
+                        *[outputs[parent][:2] for parent in parents],
+                    )
+                    l_list, u_list = zip(
+                        *[outputs[parent][2:] for parent in parents],
+                        strict=True,
+                    )
+                    outputs[node] = (
+                        selected_features,
+                        detected_outliers,
+                        np.max(l_list).item(),
+                        np.min(u_list).item(),
+                    )
+                case _:
+                    raise ValueError
+
+        raise ValueError
+
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""
         edge_list = []
