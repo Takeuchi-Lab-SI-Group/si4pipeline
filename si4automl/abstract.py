@@ -13,13 +13,13 @@ class Node:
 
     type: Literal[
         "start",
+        "end",
+        "feature_extraction",
+        "outlier_removal",
         "missing_imputation",
         "feature_selection",
         "outlier_detection",
         "index_operation",
-        "feature_extraction",
-        "outlier_removal",
-        "end",
     ]
     method: str = ""
     parameters: frozenset[float] | frozenset[int] | None = None
@@ -121,6 +121,102 @@ class DetectedOutliers:
         self.structure = structure
 
 
+class MissingImputationConstructor:
+    """A class for constructing the abstract missing imputation."""
+
+    count: ClassVar[int] = 0
+
+    def __init__(self) -> None:
+        """Initialize the MissingImputationConstructor object."""
+
+    def __call__(
+        self,
+        name: Literal[
+            "mean_value_imputation",
+            "euclidean_imputation",
+            "manhattan_imputation",
+            "chebyshev_imputation",
+            "definite_regression_imputation",
+        ],
+        feature_matrix: FeatureMatrix,
+        response_vector: ResponseVector,
+    ) -> ResponseVector:
+        """Perform the missing imputation on the feature matrix and response vector."""
+        structure = feature_matrix.structure | response_vector.structure
+        node = Node(
+            "missing_imputation",
+            name,
+            count=MissingImputationConstructor.count,
+        )
+        structure.update(node)
+        MissingImputationConstructor.count += 1
+        return ResponseVector(structure)
+
+
+class FeatureSelectionConstructor:
+    """A class for constructing the abstract feature selection."""
+
+    counter: ClassVar[dict[str, int]] = {}
+
+    def __init__(self) -> None:
+        """Initialize the FeatureSelectionConstructor object."""
+
+    def __call__(
+        self,
+        name: Literal["marginal_screening", "stepwise_feature_selection", "lasso"],
+        feature_matrix: FeatureMatrix,
+        response_vector: ResponseVector,
+        parameters: float | list[int] | list[float],
+    ) -> SelectedFeatures:
+        """Perform the feature selection on the feature matrix and response vector."""
+        structure = feature_matrix.structure | response_vector.structure
+        parameters = parameters if isinstance(parameters, list) else [parameters]
+        node = Node(
+            "feature_selection",
+            name,
+            frozenset(parameters),
+            FeatureSelectionConstructor.counter.get(name, 0),
+        )
+        # config = Config(name, parameters)
+        structure.update(node)  # , config)
+
+        FeatureSelectionConstructor.counter.setdefault(name, 0)
+        FeatureSelectionConstructor.counter[name] += 1
+        return SelectedFeatures(structure)
+
+
+class OutlierDetectionConstructor:
+    """A class for constructing the abstract outlier detection."""
+
+    counter: ClassVar[dict[str, int]] = {}
+
+    def __init__(self) -> None:
+        """Initialize the OutlierDetectionConstructor object."""
+
+    def __call__(
+        self,
+        name: Literal["cook_distance", "dffits", "soft_ipod"],
+        feature_matrix: FeatureMatrix,
+        response_vector: ResponseVector,
+        parameters: float | list[int] | list[float],
+    ) -> DetectedOutliers:
+        """Perform the outlier detection on the feature matrix and response vector."""
+        structure = feature_matrix.structure | response_vector.structure
+        parameters = parameters if isinstance(parameters, list) else [parameters]
+        node = Node(
+            "outlier_detection",
+            name,
+            frozenset(parameters),
+            OutlierDetectionConstructor.counter.get(name, 0),
+        )
+        # config = Config(name, parameters)
+        structure.update(node)  # , config)
+
+        OutlierDetectionConstructor.counter.setdefault(name, 0)
+        OutlierDetectionConstructor.counter[name] += 1
+        return DetectedOutliers(structure)
+
+
 class IndexOperationConstructor:
     """A class for constructing the abstract index operation."""
 
@@ -132,10 +228,10 @@ class IndexOperationConstructor:
     def __call__(
         self,
         name: Literal[
-            "union_of_features",
-            "union_of_outliers",
-            "intersection_of_features",
-            "intersection_of_outliers",
+            "union_features",
+            "union_outliers",
+            "intersection_features",
+            "intersection_outliers",
         ],
         *inputs: SelectedFeatures | DetectedOutliers,
     ) -> SelectedFeatures | DetectedOutliers:
@@ -145,8 +241,7 @@ class IndexOperationConstructor:
         node = Node(
             "index_operation",
             name,
-            None,
-            IndexOperationConstructor.counter.get(name, 0),
+            count=IndexOperationConstructor.counter.get(name, 0),
         )
         # config = Config(name, None)
 
@@ -214,86 +309,68 @@ class OutlierRemovalConstructor:
         return FeatureMatrix(structure), ResponseVector(structure)
 
 
-class FeatureSelectionConstructor:
-    """A class for constructing the abstract feature selection."""
-
-    counter: ClassVar[dict[str, int]] = {}
-
-    def __init__(self) -> None:
-        """Initialize the FeatureSelectionConstructor object."""
-
-    def __call__(
-        self,
-        name: str,
-        feature_matrix: FeatureMatrix,
-        response_vector: ResponseVector,
-        parameters: float | list[int] | list[float],
-    ) -> SelectedFeatures:
-        """Perform the feature selection on the feature matrix and response vector."""
-        structure = feature_matrix.structure | response_vector.structure
-        parameters = parameters if isinstance(parameters, list) else [parameters]
-        node = Node(
-            "feature_selection",
-            name,
-            frozenset(parameters),
-            FeatureSelectionConstructor.counter.get(name, 0),
-        )
-        # config = Config(name, parameters)
-        structure.update(node)  # , config)
-
-        FeatureSelectionConstructor.counter.setdefault(name, 0)
-        FeatureSelectionConstructor.counter[name] += 1
-        return SelectedFeatures(structure)
-
-
 def make_dataset() -> tuple[FeatureMatrix, ResponseVector]:
     """Make the dataset for the data analysis pipeline."""
     return FeatureMatrix(Structure()), ResponseVector(Structure())
 
 
-def union(
-    *inputs: SelectedFeatures | DetectedOutliers,
-) -> SelectedFeatures | DetectedOutliers:
-    """Perform the union operation on the selected features or detected outliers."""
-    match inputs[0]:
-        case SelectedFeatures():
-            return IndexOperationConstructor()("union_of_features", *inputs)
-        case DetectedOutliers():
-            return IndexOperationConstructor()("union_of_outliers", *inputs)
-
-
-def intersection(
-    *inputs: SelectedFeatures | DetectedOutliers,
-) -> SelectedFeatures | DetectedOutliers:
-    """Perform the intersection operation on the selected features or detected outliers."""
-    match inputs[0]:
-        case SelectedFeatures():
-            return IndexOperationConstructor()("intersection_of_features", *inputs)
-        case DetectedOutliers():
-            return IndexOperationConstructor()("intersection_of_outliers", *inputs)
-
-
-def extract_features(
+def mean_value_imputation(
     feature_matrix: FeatureMatrix,
-    selected_features: SelectedFeatures,
-) -> FeatureMatrix:
-    """Perform the feature extraction on the feature matrix based on the selected features."""
-    return FeatureExtractionConstructor()(
+    response_vector: ResponseVector,
+) -> ResponseVector:
+    """Perform the mean value imputation on the feature matrix and response vector."""
+    return MissingImputationConstructor()(
+        "mean_value_imputation",
         feature_matrix,
-        selected_features,
+        response_vector,
     )
 
 
-def remove_outliers(
+def euclidean_imputation(
     feature_matrix: FeatureMatrix,
     response_vector: ResponseVector,
-    detected_outliers: DetectedOutliers,
-) -> tuple[FeatureMatrix, ResponseVector]:
-    """Perform the outlier removal on the feature matrix and the response vector based on the detected outliers."""
-    return OutlierRemovalConstructor()(
+) -> ResponseVector:
+    """Perform the euclidean imputation on the feature matrix and response vector."""
+    return MissingImputationConstructor()(
+        "euclidean_imputation",
         feature_matrix,
         response_vector,
-        detected_outliers,
+    )
+
+
+def manhattan_imputation(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+) -> ResponseVector:
+    """Perform the manhattan imputation on the feature matrix and response vector."""
+    return MissingImputationConstructor()(
+        "manhattan_imputation",
+        feature_matrix,
+        response_vector,
+    )
+
+
+def chebyshev_imputation(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+) -> ResponseVector:
+    """Perform the chebyshev imputation on the feature matrix and response vector."""
+    return MissingImputationConstructor()(
+        "chebyshev_imputation",
+        feature_matrix,
+        response_vector,
+    )
+
+
+def definite_regression_imputation(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+) -> ResponseVector:
+    """Perform the definite regression imputation on the feature matrix and response vector."""
+    return MissingImputationConstructor()(
+        "definite_regression_imputation",
+        feature_matrix,
+        response_vector,
     )
 
 
@@ -336,6 +413,94 @@ def lasso(
         feature_matrix,
         response_vector,
         parameters,
+    )
+
+
+def cook_distance(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+    parameters: float | list[float],
+) -> DetectedOutliers:
+    """Perform the cook distance on the feature matrix and response vector."""
+    return OutlierDetectionConstructor()(
+        "cook_distance",
+        feature_matrix,
+        response_vector,
+        parameters,
+    )
+
+
+def dffits(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+    parameters: float | list[float],
+) -> DetectedOutliers:
+    """Perform the dffits on the feature matrix and response vector."""
+    return OutlierDetectionConstructor()(
+        "dffits",
+        feature_matrix,
+        response_vector,
+        parameters,
+    )
+
+
+def soft_ipod(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+    parameters: float | list[float],
+) -> DetectedOutliers:
+    """Perform the soft ipod on the feature matrix and response vector."""
+    return OutlierDetectionConstructor()(
+        "soft_ipod",
+        feature_matrix,
+        response_vector,
+        parameters,
+    )
+
+
+def union(
+    *inputs: SelectedFeatures | DetectedOutliers,
+) -> SelectedFeatures | DetectedOutliers:
+    """Perform the union operation on the selected features or detected outliers."""
+    match inputs[0]:
+        case SelectedFeatures():
+            return IndexOperationConstructor()("union_features", *inputs)
+        case DetectedOutliers():
+            return IndexOperationConstructor()("union_outliers", *inputs)
+
+
+def intersection(
+    *inputs: SelectedFeatures | DetectedOutliers,
+) -> SelectedFeatures | DetectedOutliers:
+    """Perform the intersection operation on the selected features or detected outliers."""
+    match inputs[0]:
+        case SelectedFeatures():
+            return IndexOperationConstructor()("intersection_features", *inputs)
+        case DetectedOutliers():
+            return IndexOperationConstructor()("intersection_outliers", *inputs)
+
+
+def extract_features(
+    feature_matrix: FeatureMatrix,
+    selected_features: SelectedFeatures,
+) -> FeatureMatrix:
+    """Perform the feature extraction on the feature matrix based on the selected features."""
+    return FeatureExtractionConstructor()(
+        feature_matrix,
+        selected_features,
+    )
+
+
+def remove_outliers(
+    feature_matrix: FeatureMatrix,
+    response_vector: ResponseVector,
+    detected_outliers: DetectedOutliers,
+) -> tuple[FeatureMatrix, ResponseVector]:
+    """Perform the outlier removal on the feature matrix and the response vector based on the detected outliers."""
+    return OutlierRemovalConstructor()(
+        feature_matrix,
+        response_vector,
+        detected_outliers,
     )
 
 

@@ -1,31 +1,24 @@
 """Package for statstical test for data analysis pipeline."""
 
-from si4automl.base_component import (
-    extract_features,
-    intersection,
-    remove_outliers,
-    union,
-)
-from si4automl.feature_selection import (
+from si4automl.abstract import (
+    chebyshev_imputation,
+    cook_distance,
+    definite_regression_imputation,
+    dffits,
+    euclidean_imputation,
     lasso,
+    make_dataset,
+    make_structure,
+    manhattan_imputation,
     marginal_screening,
+    mean_value_imputation,
+    soft_ipod,
     stepwise_feature_selection,
 )
-from si4automl.missing_imputation import (
-    chebyshev_imputation,
-    definite_regression_imputation,
-    euclidean_imputation,
-    manhattan_imputation,
-    mean_value_imputation,
-)
-from si4automl.outlier_detection import cook_distance, dffits, soft_ipod
-from si4automl.pipeline import make_dataset, make_pipeline, make_pipelines
+from si4automl.pipeline import Pipeline, PipelineManager
 
 __all__ = [
-    "union",
-    "intersection",
-    "extract_features",
-    "remove_outliers",
+    "make_dataset",
     "mean_value_imputation",
     "euclidean_imputation",
     "manhattan_imputation",
@@ -37,7 +30,11 @@ __all__ = [
     "stepwise_feature_selection",
     "lasso",
     "marginal_screening",
-    "make_dataset",
-    "make_pipeline",
-    "make_pipelines",
+    "union",
+    "intersection",
+    "extract_features",
+    "remove_outliers",
+    "make_structure",
+    "Pipeline",
+    "PipelineManager",
 ]
