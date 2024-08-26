@@ -4,6 +4,10 @@ from itertools import product
 from typing import cast
 
 import numpy as np
+from sicore import (  # type: ignore[import]
+    SelectiveInferenceNorm,
+    SelectiveInferenceResult,
+)
 
 from si4automl.abstract import Node, Structure
 from si4automl.feature_selection import FeatureSelection
@@ -40,7 +44,7 @@ class Pipeline:
         ] = {}
         self._validate()
 
-    def _reset_cache(self) -> None:
+    def reset_cache(self) -> None:
         """Reset the cache of the Pipeline object."""
         self.cache_quadratic_cross_validation_error = {}
         for node in self.static_order:
@@ -322,7 +326,7 @@ class PipelineManager:
         self.static_order = structure.static_order
         self.graph = structure.graph
 
-        self.pipelines = []
+        self.pipelines: list[Pipeline] = []
         layers_list = product(*[conver_entities(node) for node in self.static_order])
         for layers_ in layers_list:
             layers_ = cast(
@@ -344,6 +348,11 @@ class PipelineManager:
         self.representeing_index = 0
         self.tuned = False
 
+    def reset_cache(self) -> None:
+        """Reset the cache of the all pipelines."""
+        for pipeline in self.pipelines:
+            pipeline.reset_cache()
+
     def __call__(
         self,
         feature_matrix: np.ndarray,
@@ -352,6 +361,128 @@ class PipelineManager:
         """Perform the representing data analysis pipeline on the given feature matrix and response vector."""
         assert self.tuned or len(self.pipelines) == 1
         return self.pipelines[self.representeing_index](feature_matrix, response_vector)
+
+    def inference(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        sigma: float | None = None,
+        *,
+        test_index: int | None = None,
+        retain_result: bool = False,
+    ) -> (
+        tuple[list[int], list[float] | list[SelectiveInferenceResult]]
+        | tuple[int, float | SelectiveInferenceResult]
+    ):
+        """Inference the representing data analysis pipeline on the given feature matrix and response vector."""
+        assert self.tuned or len(self.pipelines) == 1
+        self.M, self.O = self(feature_matrix, response_vector)
+        self.X = feature_matrix
+
+        node = self.pipelines[self.representeing_index].static_order[1]
+        if node.type == "missing_imputation":
+            self.missing_imputation_method = node.method
+            layer = self.pipelines[self.representeing_index].layers[node]
+            assert isinstance(layer, MissingImputation)
+            self.imputer = layer.compute_imputer(feature_matrix, response_vector)
+        else:
+            self.missing_imputation_method = "none"
+            self.imputer = np.eye(len(response_vector))
+
+        X, y = feature_matrix, response_vector
+        if sigma is None:
+            residuals = (
+                (np.eye(len(y)) - X @ np.linalg.inv(X.T @ X) @ X.T)
+                @ self.imputer
+                @ y[~np.isnan(y)]
+            )
+            sigma = np.std(residuals, ddof=X.shape[1])
+
+        n = len(y)
+        X_ = np.delete(X, self.O, 0)  # shape (n - |O|, p)
+        X_ = X_[:, self.M]  # shape (n - |O|, |M|)
+        Im = np.delete(np.eye(n), self.O, 0)  # shape (n - |O|, n)
+        etas = np.linalg.inv(X_.T @ X_) @ X_.T @ Im  # shape (|M|, n)
+        self.etas = etas @ self.imputer  # shape (|M|, n - num_missing)
+
+        if test_index is not None:
+            self.etas = self.etas[test_index].reshape(1, -1)
+
+        # self.X, self.y = feature_matrix, response_vector
+        results: list[SelectiveInferenceResult] = []
+        for eta in self.etas:
+            self.reset_cache()
+            si = SelectiveInferenceNorm(y[~np.isnan(y)], sigma**2.0, eta)
+            results.append(si.inference(self._algorithm, self._model_selector))
+
+        match test_index, retain_result:
+            case None, False:
+                return self.M, [result.p_value for result in results]
+            case None, True:
+                return self.M, results
+            case int(), False:
+                return test_index, results[0].p_value
+            case int(), True:
+                return test_index, results[0]
+            case _, _:
+                raise ValueError
+
+        raise ValueError
+
+    def _algorithm(
+        self,
+        a: np.ndarray,
+        b: np.ndarray,
+        z: float,
+    ) -> tuple[
+        tuple[list[int], list[int]] | tuple[list[int], list[int], str],
+        list[float],
+    ]:
+        """Algorithm to perform the selective inference."""
+        if not self.tuned:
+            a, b = self.imputer @ a, self.imputer @ b
+            M, O, l, u = self.pipelines[self.representeing_index].selection_event(
+                self.X,
+                a,
+                b,
+                z,
+                mask_id=-1,
+            )
+            return (M, O), [l, u]
+
+        raise ValueError
+
+    def _model_selector(
+        self,
+        args: tuple[list[int], list[int]] | tuple[list[int], list[int], str],
+    ) -> bool:
+        """Model selector to perform the selective inference."""
+        if not self.tuned:
+            args = cast(tuple[list[int], list[int]], args)
+            M, O = args
+            return set(M) == set(self.M) and set(O) == set(self.O)
+        args = cast(tuple[list[int], list[int], str], args)
+        M, O, method = args
+        return (
+            set(M) == set(self.M)
+            and set(O) == set(self.O)
+            and method == self.missing_imputation_method
+        )
+
+    def _estimate_standard_deviation(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        imputer: np.ndarray,
+    ) -> float:
+        """Estimate the standard deviation."""
+        X, y = feature_matrix, response_vector
+        residuals = (
+            (np.eye(X.shape[0]) - X @ np.linalg.inv(X.T @ X) @ X.T)
+            @ imputer
+            @ y[~np.isnan(y)]
+        )
+        return np.std(residuals, ddof=X.shape[1])
 
     def __str__(self) -> str:
         """Return the string representation of the PipelineManager object."""
