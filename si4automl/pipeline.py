@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.polynomial import Polynomial
@@ -14,12 +14,14 @@ from sicore import (  # type: ignore[import]
     polynomial_below_zero,
 )
 
-from si4automl.abstract import Node, Structure
 from si4automl.entity import convert_node_to_config_list
 from si4automl.feature_selection import FeatureSelection
 from si4automl.index_operation import IndexOperation
 from si4automl.missing_imputation import MissingImputation
 from si4automl.outlier_detection import OutlierDetection
+
+if TYPE_CHECKING:
+    from si4automl.abstract import Node, Structure
 
 
 class PipelineManager:
@@ -288,7 +290,6 @@ class Pipeline:
         """Initialize the Pipeline object."""
         self.graph = graph
         self.layers = layers
-        self.inverse_graph: dict[Node, set[Node]] | None = None
 
         self.cache_quadratic_cross_validation_error: dict[
             int,
@@ -296,6 +297,9 @@ class Pipeline:
         ] = {}
         self.imputer: np.ndarray | None = None
         self._validate()
+
+        self._inverse_graph: dict[Node, set[Node]] = {}
+        self._str_representations: dict[Node, str] = {}
 
     def _validate(self) -> None:
         """Validate the Pipeline object."""
@@ -576,45 +580,27 @@ class Pipeline:
 
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""
-        # edge_list = []
-        # for sender in self.static_order:
-        #     for reciever, value in self.graph.items():
-        #         if sender in value:
-        #             edge_list.append(f"{sender.name} -> {reciever.name}")
-        self._create_inverse_graph()
-        self.inverse_graph = cast(dict[Node, set[Node]], self.inverse_graph)
-        edge_list = []
-        for sender in self.graph:
-            sender_layer = self.layers[sender]
-            if isinstance(sender_layer, FeatureSelection | OutlierDetection):
-                sender_literal = f"{sender.name} (param {sender_layer.parameter})"
-            else:
-                sender_literal = sender.name
-            for reciever in self.inverse_graph[sender]:
-                reciever_layer = self.layers[reciever]
-                if isinstance(reciever_layer, FeatureSelection | OutlierDetection):
-                    reciever_literal = (
-                        f"{reciever.name} (param {reciever_layer.parameter})"
-                    )
-                else:
-                    reciever_literal = reciever.name
-                edge_list.append(f"{sender_literal} -> {reciever_literal}")
+        self._prepare_str_representation()
+        edge_list = [
+            f"{self._str_representations[sender]} -> {self._str_representations[reciever]}"
+            for sender in self._inverse_graph
+            for reciever in self._inverse_graph[sender]
+        ]
         return "\n".join(edge_list)
 
-    def _create_inverse_graph(self) -> None:
-        """Create the inverse graph."""
-        if self.inverse_graph is not None:
+    def _prepare_str_representation(self) -> None:
+        """Prepare the string representation of the Pipeline object."""
+        if self._str_representations or self._inverse_graph:
             return
-        self.inverse_graph = {node: set() for node in self.graph}
-        for node in self.graph:
-            for parent in self.graph[node]:
-                self.inverse_graph[node].add(parent)
-
-    def show_parameter(self) -> str:
-        """Return the string representation of the PipelineManager object."""
-        list_ = []
         for node in self.graph:
             layer = self.layers[node]
             if isinstance(layer, FeatureSelection | OutlierDetection):
-                list_.append(f"{node.type}: {node.method} with {layer.parameter}")
-        return "\n".join(list_)
+                self._str_representations[node] = (
+                    f"{node.name}(param:{layer.parameter})"
+                )
+            else:
+                self._str_representations[node] = node.name
+        self._inverse_graph = {
+            node: {child for child in self.graph if node in self.graph[child]}
+            for node in self.graph
+        }
