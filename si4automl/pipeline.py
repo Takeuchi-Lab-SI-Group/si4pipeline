@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.polynomial import Polynomial
@@ -14,14 +14,13 @@ from sicore import (  # type: ignore[import]
     polynomial_below_zero,
 )
 
-from si4automl.abstract import Node, Structure
-from si4automl.entity import Config, convert_node_to_config_list
+if TYPE_CHECKING:
+    from si4automl.abstract import Node, Structure
+from si4automl.entity import convert_node_to_config_list
 from si4automl.feature_selection import FeatureSelection
 from si4automl.index_operation import IndexOperation
 from si4automl.missing_imputation import MissingImputation
 from si4automl.outlier_detection import OutlierDetection
-
-_ = Config
 
 
 class Pipeline:
@@ -360,25 +359,28 @@ class Pipeline:
 class PipelineManager:
     """A class to manage the data analysis pipelines."""
 
-    def __init__(self, structure: Structure) -> None:
+    def __init__(self, structure: Structure | None = None) -> None:
         """Initialize the PipelineManager object."""
-        self.static_order = structure.static_order
-        self.graph = structure.graph
-
         self.pipelines: list[Pipeline] = []
+        self.representeing_index = 0
+        self.tuned = False
+
+        if structure is None:
+            return
+        static_order = structure.static_order
+        graph = structure.graph
+
         configs_iters = product(
-            *[convert_node_to_config_list(node) for node in self.static_order],
+            *[convert_node_to_config_list(node) for node in static_order],
         )
         for configs in configs_iters:
             entities = [config.entity for config in configs]
             pipeline = Pipeline(
-                static_order=self.static_order,
-                graph=self.graph,
-                layers=dict(zip(self.static_order, entities, strict=True)),
+                static_order=static_order,
+                graph=graph,
+                layers=dict(zip(static_order, entities, strict=True)),
             )
             self.pipelines.append(pipeline)
-        self.representeing_index = 0
-        self.tuned = False
 
     def tune(
         self,
@@ -613,6 +615,14 @@ class PipelineManager:
             "Representing pipelines:\n"
             f"{self.pipelines[self.representeing_index]}"
         )
+
+    def __or__(self, other: PipelineManager) -> PipelineManager:
+        """Merge the two PipelineManager objects."""
+        manager = PipelineManager()
+        manager.pipelines = self.pipelines + other.pipelines
+        manager.representeing_index = 0
+        manager.tuned = False
+        return manager
 
     def show_parameter(self) -> str:
         """Return the string representation of the PipelineManager object."""
