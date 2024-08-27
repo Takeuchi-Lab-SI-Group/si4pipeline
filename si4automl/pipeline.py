@@ -147,7 +147,7 @@ class PipelineManager:
 
         results: list[SelectiveInferenceResult] = []
         for eta in self.etas:
-            self.reset_cache_of_pipelines()
+            self._reset_cache_of_pipelines()
             si = SelectiveInferenceNorm(y[~np.isnan(y)], sigma**2.0, eta)
             results.append(si.inference(self._algorithm, self._model_selector))
 
@@ -250,7 +250,7 @@ class PipelineManager:
             and method == self.missing_imputation_method
         )
 
-    def reset_cache_of_pipelines(self) -> None:
+    def _reset_cache_of_pipelines(self) -> None:
         """Reset the cache of the all pipelines."""
         for pipeline in self.pipelines:
             pipeline.reset_cache()
