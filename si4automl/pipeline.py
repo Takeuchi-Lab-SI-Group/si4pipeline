@@ -1,5 +1,7 @@
 """Module containing entity for the data analysis pipeline and manager of it."""
 
+from __future__ import annotations
+
 from itertools import product
 from typing import cast
 
@@ -13,11 +15,13 @@ from sicore import (  # type: ignore[import]
 )
 
 from si4automl.abstract import Node, Structure
+from si4automl.entity import Config, convert_node_to_config_list
 from si4automl.feature_selection import FeatureSelection
 from si4automl.index_operation import IndexOperation
 from si4automl.missing_imputation import MissingImputation
 from si4automl.outlier_detection import OutlierDetection
-from si4automl.utils import conver_entities
+
+_ = Config
 
 
 class Pipeline:
@@ -362,22 +366,15 @@ class PipelineManager:
         self.graph = structure.graph
 
         self.pipelines: list[Pipeline] = []
-        layers_list = product(*[conver_entities(node) for node in self.static_order])
-        for layers_ in layers_list:
-            layers_ = cast(
-                tuple[
-                    MissingImputation
-                    | FeatureSelection
-                    | OutlierDetection
-                    | IndexOperation
-                    | None
-                ],
-                layers_,
-            )
+        configs_iters = product(
+            *[convert_node_to_config_list(node) for node in self.static_order],
+        )
+        for configs in configs_iters:
+            entities = [config.entity for config in configs]
             pipeline = Pipeline(
                 static_order=self.static_order,
                 graph=self.graph,
-                layers=dict(zip(self.static_order, layers_, strict=True)),
+                layers=dict(zip(self.static_order, entities, strict=True)),
             )
             self.pipelines.append(pipeline)
         self.representeing_index = 0
