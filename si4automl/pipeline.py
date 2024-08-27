@@ -6,8 +6,10 @@ from typing import cast
 import numpy as np
 from numpy.polynomial import Polynomial
 from sicore import (  # type: ignore[import]
+    RealSubset,
     SelectiveInferenceNorm,
     SelectiveInferenceResult,
+    polynomial_below_zero,
 )
 
 from si4automl.abstract import Node, Structure
@@ -133,7 +135,7 @@ class Pipeline:
         a: np.ndarray,
         b: np.ndarray,
         z: float,
-        mask_id: int,
+        mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
         """Compute the selection event."""
         outputs: dict[Node, tuple[list[int], list[int], float, float]] = {}
@@ -221,7 +223,7 @@ class Pipeline:
         a: np.ndarray,
         b: np.ndarray,
         z: float,
-        cross_validation_masks: list[list[int]],
+        cross_validation_masks: list[np.ndarray],
     ) -> tuple[Polynomial, float, float]:
         """Compute the cross validation error in the quadratic form."""
         assert X.shape[0] == a.shape[0] == b.shape[0]
@@ -476,6 +478,9 @@ class PipelineManager:
         if test_index is not None:
             self.etas = self.etas[test_index].reshape(1, -1)
 
+        print("Self Value:", self.M, self.O, self.missing_imputation_method)
+        self.y = y[~np.isnan(y)]
+
         # self.X, self.y = feature_matrix, response_vector
         results: list[SelectiveInferenceResult] = []
         for eta in self.etas:
@@ -514,19 +519,61 @@ class PipelineManager:
                 imputer @ a,
                 imputer @ b,
                 z,
-                mask_id=-1,
             )
             return (M, O), [l, u]
+
+        l_list, u_list = [-np.inf], [np.inf]
         polynomial_list: list[Polynomial] = []
         for index in self.candidates_indices:
-            # node = self.pipelines[index].static_order[1]
-            # if node.type == "missing_imputation" and self.exist_missing:
-            #     missing_imputation_method = node.method
-            # else:
-            #     missing_imputation_method = "none"
             imputer = self.pipelines[index].load_imputer()
-            a_imputed, b_imputed = imputer @ a, imputer @ b
-        raise ValueError
+            quadratic, l, u = self.pipelines[index].quadratic_cross_validation_error(
+                self.X,
+                imputer @ a,
+                imputer @ b,
+                z,
+                self.cross_validation_masks,
+            )
+            polynomial_list.append(quadratic)
+            l_list.append(l)
+            u_list.append(u)
+
+        best_index = np.argmin([quadratic(z) for quadratic in polynomial_list])
+        best_quadratic = polynomial_list[best_index]
+        for quadratic in polynomial_list:
+            l, u = RealSubset(
+                polynomial_below_zero(best_quadratic - quadratic),
+            ).find_interval_containing(z)
+            l_list.append(l)
+            u_list.append(u)
+
+        # print(self.candidates_indices[best_index])
+
+        imputer = self.pipelines[self.candidates_indices[best_index]].load_imputer()
+        M, O, l, u = self.pipelines[
+            self.candidates_indices[best_index]
+        ].selection_event(
+            self.X,
+            imputer @ a,
+            imputer @ b,
+            z,
+        )
+        l_list.append(l)
+        u_list.append(u)
+
+        node = self.pipelines[self.candidates_indices[best_index]].static_order[1]
+        if node.type == "missing_imputation" and self.exist_missing:
+            missing_imputation_method = node.method
+        else:
+            missing_imputation_method = "none"
+
+        l, u = np.max(l_list).item(), np.min(u_list).item()
+        assert l <= z <= u
+        print(M, O, missing_imputation_method)
+        raise ValueError("hogehoge")
+        return (
+            (M, O, missing_imputation_method),
+            [l, u],
+        )
 
     def _model_selector(
         self,
@@ -558,3 +605,12 @@ class PipelineManager:
             "Representing pipelines:\n"
             f"{self.pipelines[self.representeing_index]}"
         )
+
+    def show_parameter(self) -> str:
+        """Return the string representation of the PipelineManager object."""
+        list_ = []
+        for node in self.pipelines[self.representeing_index].static_order:
+            layer = self.pipelines[self.representeing_index].layers[node]
+            if isinstance(layer, FeatureSelection | OutlierDetection):
+                list_.append(f"{node.type}: {node.method} with {layer.parameter}")
+        return "\n".join(list_)
