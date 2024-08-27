@@ -41,7 +41,6 @@ class PipelineManager:
         for configs in configs_iters:
             entities = [config.entity for config in configs]
             pipeline = Pipeline(
-                static_order=structure.static_order,
                 graph=graph,
                 layers=dict(zip(graph.keys(), entities, strict=True)),
             )
@@ -276,7 +275,6 @@ class Pipeline:
 
     def __init__(
         self,
-        static_order: list[Node],
         graph: dict[Node, set[Node]],
         layers: dict[
             Node,
@@ -288,7 +286,6 @@ class Pipeline:
         ],
     ) -> None:
         """Initialize the Pipeline object."""
-        self.static_order = static_order
         self.graph = graph
         self.layers = layers
         self.inverse_graph: dict[Node, set[Node]] | None = None
@@ -302,7 +299,7 @@ class Pipeline:
 
     def _validate(self) -> None:
         """Validate the Pipeline object."""
-        for node in self.static_order:
+        for node in self.graph:
             parents = list(self.graph[node])
             match node.type:
                 case "start":
@@ -587,7 +584,7 @@ class Pipeline:
         self._create_inverse_graph()
         self.inverse_graph = cast(dict[Node, set[Node]], self.inverse_graph)
         edge_list = []
-        for sender in self.static_order:
+        for sender in self.graph:
             sender_layer = self.layers[sender]
             if isinstance(sender_layer, FeatureSelection | OutlierDetection):
                 sender_literal = f"{sender.name} (param {sender_layer.parameter})"
@@ -608,15 +605,15 @@ class Pipeline:
         """Create the inverse graph."""
         if self.inverse_graph is not None:
             return
-        self.inverse_graph = {node: set() for node in self.static_order}
-        for node in self.static_order:
+        self.inverse_graph = {node: set() for node in self.graph}
+        for node in self.graph:
             for parent in self.graph[node]:
                 self.inverse_graph[node].add(parent)
 
     def show_parameter(self) -> str:
         """Return the string representation of the PipelineManager object."""
         list_ = []
-        for node in self.static_order:
+        for node in self.graph:
             layer = self.layers[node]
             if isinstance(layer, FeatureSelection | OutlierDetection):
                 list_.append(f"{node.type}: {node.method} with {layer.parameter}")

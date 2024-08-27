@@ -67,8 +67,6 @@ class Structure:
     def sort_graph(self) -> None:
         """Topologically sort the graph of the data analysis pipeline."""
         ts = TopologicalSorter(self.graph)
-        self.static_order = list(ts.static_order())
-        ts = TopologicalSorter(self.graph)
         self.graph = {node: self.graph[node] for node in ts.static_order()}
 
 
