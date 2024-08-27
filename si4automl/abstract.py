@@ -64,10 +64,12 @@ class Structure:
         )
         return structure
 
-    def make_sorted_node_list(self) -> None:
-        """Make the topologically sorted graph of the data analysis pipeline."""
+    def sort_graph(self) -> None:
+        """Topologically sort the graph of the data analysis pipeline."""
         ts = TopologicalSorter(self.graph)
         self.static_order = list(ts.static_order())
+        ts = TopologicalSorter(self.graph)
+        self.graph = {node: self.graph[node] for node in ts.static_order()}
 
 
 class FeatureMatrix:
@@ -484,5 +486,5 @@ def make_structure(output: SelectedFeatures) -> Structure:
     """Make the Structure object of defined data analysis pipeline."""
     structure = output.structure
     structure.update(Node("end"))
-    structure.make_sorted_node_list()
+    structure.sort_graph()
     return structure

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import numpy as np
 from numpy.polynomial import Polynomial
@@ -14,8 +14,7 @@ from sicore import (  # type: ignore[import]
     polynomial_below_zero,
 )
 
-if TYPE_CHECKING:
-    from si4automl.abstract import Node, Structure
+from si4automl.abstract import Node, Structure
 from si4automl.entity import convert_node_to_config_list
 from si4automl.feature_selection import FeatureSelection
 from si4automl.index_operation import IndexOperation
@@ -34,18 +33,17 @@ class PipelineManager:
 
         if structure is None:
             return
-        static_order = structure.static_order
         graph = structure.graph
 
         configs_iters = product(
-            *[convert_node_to_config_list(node) for node in static_order],
+            *[convert_node_to_config_list(node) for node in graph],
         )
         for configs in configs_iters:
             entities = [config.entity for config in configs]
             pipeline = Pipeline(
-                static_order=static_order,
+                static_order=structure.static_order,
                 graph=graph,
-                layers=dict(zip(static_order, entities, strict=True)),
+                layers=dict(zip(graph.keys(), entities, strict=True)),
             )
             self.pipelines.append(pipeline)
 
@@ -116,7 +114,7 @@ class PipelineManager:
         self.M, self.O = self(feature_matrix, response_vector)
         self.X = feature_matrix
 
-        node = self.pipelines[self.representeing_index].static_order[1]
+        node = list(self.pipelines[self.representeing_index].graph.keys())[1]
         self.exist_missing = np.any(np.isnan(response_vector))
         if node.type == "missing_imputation" and self.exist_missing:
             self.missing_imputation_method = node.method
@@ -221,7 +219,7 @@ class PipelineManager:
         l_list.append(l)
         u_list.append(u)
 
-        node = self.pipelines[self.candidates_indices[best_index]].static_order[1]
+        node = list(self.pipelines[self.candidates_indices[best_index]].graph.keys())[1]
         if node.type == "missing_imputation" and self.exist_missing:
             missing_imputation_method = node.method
         else:
@@ -272,15 +270,6 @@ class PipelineManager:
         manager.tuned = False
         return manager
 
-    def show_parameter(self) -> str:
-        """Return the string representation of the PipelineManager object."""
-        list_ = []
-        for node in self.pipelines[self.representeing_index].static_order:
-            layer = self.pipelines[self.representeing_index].layers[node]
-            if isinstance(layer, FeatureSelection | OutlierDetection):
-                list_.append(f"{node.type}: {node.method} with {layer.parameter}")
-        return "\n".join(list_)
-
 
 class Pipeline:
     """An entity class for the data analysis pipeline."""
@@ -302,6 +291,7 @@ class Pipeline:
         self.static_order = static_order
         self.graph = graph
         self.layers = layers
+        self.inverse_graph: dict[Node, set[Node]] | None = None
 
         self.cache_quadratic_cross_validation_error: dict[
             int,
@@ -312,8 +302,6 @@ class Pipeline:
 
     def _validate(self) -> None:
         """Validate the Pipeline object."""
-        assert self.static_order[0].type == "start"
-        assert self.static_order[-1].type == "end"
         for node in self.static_order:
             parents = list(self.graph[node])
             match node.type:
@@ -345,7 +333,7 @@ class Pipeline:
     ) -> tuple[list[int], list[int]]:
         """Perform the data analysis pipeline on the given feature matrix and response vector."""
         outputs: dict[Node, tuple[list[int], list[int]]] = {}
-        for node in self.static_order:
+        for node in self.graph:
             layer = self.layers[node]
             parents = list(self.graph[node])
             match node.type:
@@ -402,7 +390,7 @@ class Pipeline:
         """Compute the selection event."""
         assert X.shape[0] == a.shape[0] == b.shape[0]
         outputs: dict[Node, tuple[list[int], list[int], float, float]] = {}
-        for node in self.static_order:
+        for node in self.graph:
             layer = self.layers[node]
             parents = list(self.graph[node])
             match node.type:
@@ -453,11 +441,6 @@ class Pipeline:
     ) -> float:
         """Compute the cross validation error."""
         X, y = feature_matrix, response_vector
-        # layer = self.layers[self.static_order[1]]
-        # if isinstance(layer, MissingImputation):
-        #     imputer = layer.compute_imputer(X, y)
-        # else:
-        #     imputer = np.eye(len(y))
         imputer = self.compute_imputer(X, y)
         y = imputer @ y[~np.isnan(y)]
 
@@ -574,7 +557,7 @@ class Pipeline:
         response_vector: np.ndarray,
     ) -> np.ndarray:
         """Compute the imputer matrix based on the data analysis pipeline."""
-        layer = self.layers[self.static_order[1]]
+        layer = self.layers[list(self.graph.keys())[1]]
         if isinstance(layer, MissingImputation):
             self.imputer = layer.compute_imputer(feature_matrix, response_vector)
         else:
@@ -589,16 +572,52 @@ class Pipeline:
     def reset_cache(self) -> None:
         """Reset the cache of the Pipeline object."""
         self.cache_quadratic_cross_validation_error = {}
-        for node in self.static_order:
+        for node in self.graph:
             layer = self.layers[node]
             if isinstance(layer, FeatureSelection | OutlierDetection):
                 layer.reset_cache()
 
     def __str__(self) -> str:
         """Return the string representation of the Pipeline object."""
+        # edge_list = []
+        # for sender in self.static_order:
+        #     for reciever, value in self.graph.items():
+        #         if sender in value:
+        #             edge_list.append(f"{sender.name} -> {reciever.name}")
+        self._create_inverse_graph()
+        self.inverse_graph = cast(dict[Node, set[Node]], self.inverse_graph)
         edge_list = []
         for sender in self.static_order:
-            for reciever, value in self.graph.items():
-                if sender in value:
-                    edge_list.append(f"{sender.name} -> {reciever.name}")
+            sender_layer = self.layers[sender]
+            if isinstance(sender_layer, FeatureSelection | OutlierDetection):
+                sender_literal = f"{sender.name} (param {sender_layer.parameter})"
+            else:
+                sender_literal = sender.name
+            for reciever in self.inverse_graph[sender]:
+                reciever_layer = self.layers[reciever]
+                if isinstance(reciever_layer, FeatureSelection | OutlierDetection):
+                    reciever_literal = (
+                        f"{reciever.name} (param {reciever_layer.parameter})"
+                    )
+                else:
+                    reciever_literal = reciever.name
+                edge_list.append(f"{sender_literal} -> {reciever_literal}")
         return "\n".join(edge_list)
+
+    def _create_inverse_graph(self) -> None:
+        """Create the inverse graph."""
+        if self.inverse_graph is not None:
+            return
+        self.inverse_graph = {node: set() for node in self.static_order}
+        for node in self.static_order:
+            for parent in self.graph[node]:
+                self.inverse_graph[node].add(parent)
+
+    def show_parameter(self) -> str:
+        """Return the string representation of the PipelineManager object."""
+        list_ = []
+        for node in self.static_order:
+            layer = self.layers[node]
+            if isinstance(layer, FeatureSelection | OutlierDetection):
+                list_.append(f"{node.type}: {node.method} with {layer.parameter}")
+        return "\n".join(list_)
