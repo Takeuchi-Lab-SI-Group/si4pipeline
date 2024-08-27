@@ -4,6 +4,7 @@ from itertools import product
 from typing import cast
 
 import numpy as np
+from numpy.polynomial import Polynomial
 from sicore import (  # type: ignore[import]
     SelectiveInferenceNorm,
     SelectiveInferenceResult,
@@ -186,7 +187,7 @@ class Pipeline:
         cross_validation_masks: list[list[int]],
     ) -> float:
         """Compute the cross validation error."""
-        X, y, error_list = feature_matrix, response_vector, []
+        X, y = feature_matrix, response_vector
         # layer = self.layers[self.static_order[1]]
         # if isinstance(layer, MissingImputation):
         #     imputer = layer.compute_imputer(X, y)
@@ -195,6 +196,7 @@ class Pipeline:
         imputer = self.load_imputer(X, y)
         y = imputer @ y[~np.isnan(y)]
 
+        error_list = []
         for mask in cross_validation_masks:
             X_tr, y_tr = X[mask], y[mask]
             X_val, y_val = np.delete(X, mask, 0), np.delete(y, mask)
@@ -220,10 +222,11 @@ class Pipeline:
         b: np.ndarray,
         z: float,
         cross_validation_masks: list[list[int]],
-    ) -> tuple[list[float], float, float]:
+    ) -> tuple[Polynomial, float, float]:
         """Compute the cross validation error in the quadratic form."""
         assert X.shape[0] == a.shape[0] == b.shape[0]
-        l_list, u_list, quadratic_list = [], [], []
+        l_list, u_list = [], []
+        quadratic_list = []
         for mask_id, mask in enumerate(cross_validation_masks):
             load = self._load_quadratic_cross_validation_error(mask_id, z)
             if load is not None:
@@ -254,9 +257,9 @@ class Pipeline:
 
             if len(selected_features_cv) == 0:
                 quadratic = [
-                    b_val @ b_val / num,
-                    2 * b_val @ a_val / num,
                     a_val @ a_val / num,
+                    2 * b_val @ a_val / num,
+                    b_val @ b_val / num,
                 ]
             else:
                 F = (
@@ -275,14 +278,14 @@ class Pipeline:
                     + 2 * a_tr @ G @ b_tr
                 )
                 gamma = a_val @ a_val - 2 * a_tr @ F @ a_val + a_tr @ G @ a_tr
-                quadratic = [alpha / num, beta / num, gamma / num]
+                quadratic = [gamma / num, beta / num, alpha / num]
             quadratic_list.append(quadratic)
             self.cache_quadratic_cross_validation_error.setdefault(mask_id, {})[
                 (l, u)
             ] = quadratic
 
         return (
-            np.mean(quadratic_list, axis=0).tolist(),
+            Polynomial(np.mean(quadratic_list, axis=0)),
             np.max(l_list).item(),
             np.min(u_list).item(),
         )
@@ -363,17 +366,6 @@ class PipelineManager:
             self.pipelines.append(pipeline)
         self.representeing_index = 0
         self.tuned = False
-
-    # def tune(
-    #     self,
-    #     feature_matrix: np.ndarray,
-    #     response_vector: np.ndarray,
-    #     *,
-    #     num_folds: int = 5,
-    #     max_candidates: int | None = None,
-    #     random_state: int | None = 0,
-    # ) -> None:
-    #     self.tuned = True
 
     def __call__(
         self,
