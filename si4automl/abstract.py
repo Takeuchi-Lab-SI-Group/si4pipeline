@@ -35,35 +35,17 @@ class Node:
         return f"{self.method}_{self.count}"
 
 
-# @dataclass
-# class Config:
-#     """A class for the configuration of the node of the data analysis pipeline."""
-
-#     name: str
-#     parameters: float | list[int] | list[float] | None
-
-#     def __post_init__(self) -> None:
-#         """Post-initialize the Config object."""
-#         if self.parameters is None or isinstance(self.parameters, list):
-#             self.parameters = self.parameters
-#         else:
-#             self.parameters = [self.parameters]
-
-
 class Structure:
     """An abstract class for the structure of the data analysis pipeline."""
 
     def __init__(self) -> None:
         """Initialize the Structure object."""
         self.graph: dict[Node, set[Node]] = {Node("start"): set()}
-        # self.configs: dict[Node, Config] = {Node("start"): Config("start", None)}
         self.current_node = Node("start")
 
-    # def update(self, node: Node, config: Config) -> None:
     def update(self, node: Node) -> None:
         """Update the structure of the data analysis pipeline."""
         self.graph.setdefault(node, set()).add(self.current_node)
-        # self.configs[node] = config
         self.current_node = node
 
     def __or__(self, other: Structure) -> Structure:
@@ -75,7 +57,6 @@ class Structure:
                 key,
                 set(),
             )
-        # structure.configs = {**self.configs, **other.configs}
         structure.current_node = (
             self.current_node
             if self.graph.keys() >= other.graph.keys()
@@ -177,8 +158,7 @@ class FeatureSelectionConstructor:
             frozenset(parameters),
             FeatureSelectionConstructor.counter.get(name, 0),
         )
-        # config = Config(name, parameters)
-        structure.update(node)  # , config)
+        structure.update(node)
 
         FeatureSelectionConstructor.counter.setdefault(name, 0)
         FeatureSelectionConstructor.counter[name] += 1
@@ -209,8 +189,7 @@ class OutlierDetectionConstructor:
             frozenset(parameters),
             OutlierDetectionConstructor.counter.get(name, 0),
         )
-        # config = Config(name, parameters)
-        structure.update(node)  # , config)
+        structure.update(node)
 
         OutlierDetectionConstructor.counter.setdefault(name, 0)
         OutlierDetectionConstructor.counter[name] += 1
@@ -243,11 +222,10 @@ class IndexOperationConstructor:
             name,
             count=IndexOperationConstructor.counter.get(name, 0),
         )
-        # config = Config(name, None)
 
         structure = inputs[0].structure
         for input_ in inputs:
-            input_.structure.update(node)  # , config)
+            input_.structure.update(node)
             structure = structure | input_.structure
 
         IndexOperationConstructor.counter.setdefault(name, 0)
@@ -276,8 +254,7 @@ class FeatureExtractionConstructor:
         """Perform the feature extraction on the feature matrix based on the selected features."""
         structure = feature_matrix.structure | selected_features.structure
         node = Node("feature_extraction", count=FeatureExtractionConstructor.count)
-        # config = Config("feature_selection", None)
-        structure.update(node)  # , config)
+        structure.update(node)
         FeatureExtractionConstructor.count += 1
         return FeatureMatrix(structure)
 
@@ -303,8 +280,7 @@ class OutlierRemovalConstructor:
             | detected_outliers.structure
         )
         node = Node("outlier_removal", count=OutlierRemovalConstructor.count)
-        # config = Config("outlier_removal", None)
-        structure.update(node)  # , config)
+        structure.update(node)
         OutlierRemovalConstructor.count += 1
         return FeatureMatrix(structure), ResponseVector(structure)
 
@@ -507,6 +483,6 @@ def remove_outliers(
 def make_structure(output: SelectedFeatures) -> Structure:
     """Make the Structure object of defined data analysis pipeline."""
     structure = output.structure
-    structure.update(Node("end"))  # , Config("end", None))
+    structure.update(Node("end"))
     structure.make_sorted_node_list()
     return structure
