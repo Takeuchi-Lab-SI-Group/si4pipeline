@@ -1,0 +1,62 @@
+{
+    // Workbenchの設定
+    "workbench.startupEditor": "none",
+    "workbench.editor.tabSizing": "fixed",
+    "workbench.editor.enablePreview": true,
+    "workbench.iconTheme": "vscode-icons",
+    // Editorの設定
+    "editor.renderWhitespace": "all",
+    "editor.minimap.enabled": false,
+    "editor.fontFamily": "'Source Han Code JP','Ricty Diminished'",
+    "editor.fontSize": 16,
+    "editor.indentSize": "tabSize",
+    "editor.formatOnSave": true,
+    "editor.inlineSuggest.enabled": true, // Copilotのために有効化
+    // ファイルの設定
+    "files.exclude": {
+        "*.drivedownload": true,
+    },
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true,
+    "files.eol": "\r\n",
+    // パンくずリストの設定
+    "breadcrumbs.enabled": false,
+    // エクスプローラーの設定
+    "explorer.confirmDelete": true,
+    // ターミナルの設定
+    "terminal.integrated.fontFamily": "'Source Han Code JP','Ricty Diminished'",
+    "terminal.integrated.fontSize": 13,
+    // Gitの設定
+    // "git.ignoreWindowsGit27Warning": true,
+    // "git.ignoreLimitWarning": true,
+    // "git.openRepositoryInParentFolders": "never",
+    // "git.ignoreLegacyWarning": true,
+    // Copilotの設定
+    "github.copilot.editor.enableAutoCompletions": true,
+    "github.copilot.enable": {
+        "*": true,
+    },
+    // Pythonの設定
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        },
+        "editor.defaultFormatter": "charliermarsh.ruff",
+    },
+    // Ruffの設定
+    "ruff.lint.enable": true,
+    "ruff.organizeImports": true,
+    "ruff.lint.args": [
+        "--config=pyproject.toml"
+    ],
+    "ruff.importStrategy": "fromEnvironment",
+    // mypyの設定
+    "mypy-type-checker.args": [
+        "--config-file=pyproject.toml"
+    ],
+    "mypy-type-checker.importStrategy": "fromEnvironment",
+    // Jupyterの設定
+    "jupyter.askForKernelRestart": true,
+}

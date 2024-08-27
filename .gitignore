@@ -1,9 +1,8 @@
-__pycache__
-qqplot.pdf
-path_for_stdoutfile
-path_for_errorfile
-result.txt
-result*
-temp.sh
-temp
-path_for_logs
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+*__pycache__*
+
+path_for_*
+results*
