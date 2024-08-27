@@ -138,6 +138,7 @@ class Pipeline:
         mask_id: int = -1,
     ) -> tuple[list[int], list[int], float, float]:
         """Compute the selection event."""
+        assert X.shape[0] == a.shape[0] == b.shape[0]
         outputs: dict[Node, tuple[list[int], list[int], float, float]] = {}
         for node in self.static_order:
             layer = self.layers[node]
@@ -203,7 +204,7 @@ class Pipeline:
             X_val, y_val = X[mask], y[mask]
             X_tr, y_tr = np.delete(X, mask, 0), np.delete(y, mask)
             M, O = self(X_tr, y_tr)
-            print(M, O)
+            # print(M, O)
             X_tr, y_tr = np.delete(X_tr, O, 0), np.delete(y_tr, O)
             if len(M) == 0:
                 error_list.append(np.mean(y_val**2))
@@ -231,8 +232,10 @@ class Pipeline:
         l_list, u_list = [], []
         quadratic_list = []
         for mask_id, mask in enumerate(cross_validation_masks):
+            # self.reset_cache() # TODO(shirara): remove
             load = self._load_quadratic_cross_validation_error(mask_id, z)
             if load is not None:
+                # print("why loaded")  # TODO(shirara): remove
                 quadratic, l, u = load
                 quadratic_list.append(quadratic)
                 l_list.append(l)
@@ -249,7 +252,15 @@ class Pipeline:
                 l,
                 u,
             ) = self.selection_event(X_tr, a_tr, b_tr, z, mask_id)
-            print(selected_features_cv, detected_outliers_cv)
+            # TODO: remove under area:
+            # ----------------------------------------------------
+            # print(selected_features_cv, detected_outliers_cv)
+            M, O = self(X_tr, a_tr + b_tr * z)
+            if set(M) != set(selected_features_cv) or set(O) != set(
+                detected_outliers_cv,
+            ):
+                print(mask_id, np.any(np.isnan(a_tr)), np.any(np.isnan(b_tr)))
+            # ----------------------------------------------------
             l_list.append(l)
             u_list.append(u)
 
@@ -408,7 +419,7 @@ class PipelineManager:
             )
             for index in self.candidates_indices
         ]
-        print(cross_validation_error_list)
+        # print(cross_validation_error_list) # TODO(shirara): remove
         self.representeing_index = self.candidates_indices[
             np.argmin(cross_validation_error_list)
         ]
@@ -475,14 +486,12 @@ class PipelineManager:
         Im = np.delete(np.eye(n), self.O, 0)  # shape (n - |O|, n)
         etas = np.linalg.inv(X_.T @ X_) @ X_.T @ Im  # shape (|M|, n)
         self.etas = etas @ imputer  # shape (|M|, n - num_missing)
-
         if test_index is not None:
             self.etas = self.etas[test_index].reshape(1, -1)
 
-        print("Self Value:", self.M, self.O, self.missing_imputation_method)
-        self.y = y[~np.isnan(y)]
+        # print(self.M, self.O, self.missing_imputation_method)  # TODO(shirara): remove
+        # self.y = y[~np.isnan(y)]  # TODO(shirara): remove
 
-        # self.X, self.y = feature_matrix, response_vector
         results: list[SelectiveInferenceResult] = []
         for eta in self.etas:
             self.reset_cache_of_pipelines()
@@ -526,6 +535,7 @@ class PipelineManager:
         polynomial_list: list[Polynomial] = []
         for index in self.candidates_indices:
             imputer = self.pipelines[index].load_imputer()
+            # assert np.allclose(imputer @ self.y, imputer @ a + imputer @ b * z) # TODO(shirara): remove
             quadratic, l, u = self.pipelines[index].quadratic_cross_validation_error(
                 self.X,
                 imputer @ a,
@@ -537,7 +547,7 @@ class PipelineManager:
             l_list.append(l)
             u_list.append(u)
 
-        print([quadratic(z) for quadratic in polynomial_list])
+        # print([quadratic(z) for quadratic in polynomial_list]) # TODO(shirara): remove
         best_index = np.argmin([quadratic(z) for quadratic in polynomial_list])
         best_quadratic = polynomial_list[best_index]
         for quadratic in polynomial_list:
@@ -569,8 +579,8 @@ class PipelineManager:
 
         l, u = np.max(l_list).item(), np.min(u_list).item()
         assert l <= z <= u
-        print(M, O, missing_imputation_method)
-        raise ValueError("hogehoge")
+        # print(M, O, missing_imputation_method) # TODO(shirara): remove
+        # raise ValueError("Completed")  # TODO(shirara): remove
         return (
             (M, O, missing_imputation_method),
             [l, u],
