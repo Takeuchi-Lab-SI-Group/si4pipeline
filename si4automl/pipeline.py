@@ -200,9 +200,10 @@ class Pipeline:
 
         error_list = []
         for mask in cross_validation_masks:
-            X_tr, y_tr = X[mask], y[mask]
-            X_val, y_val = np.delete(X, mask, 0), np.delete(y, mask)
+            X_val, y_val = X[mask], y[mask]
+            X_tr, y_tr = np.delete(X, mask, 0), np.delete(y, mask)
             M, O = self(X_tr, y_tr)
+            print(M, O)
             X_tr, y_tr = np.delete(X_tr, O, 0), np.delete(y_tr, O)
             if len(M) == 0:
                 error_list.append(np.mean(y_val**2))
@@ -238,25 +239,24 @@ class Pipeline:
                 u_list.append(u)
                 continue
 
-            X_tr, a_tr, b_tr = X[mask], a[mask], b[mask]
+            X_val, a_val, b_val = X[mask], a[mask], b[mask]
+            X_tr = np.delete(X, mask, 0)
+            a_tr = np.delete(a, mask)
+            b_tr = np.delete(b, mask)
             (
                 selected_features_cv,
                 detected_outliers_cv,
                 l,
                 u,
             ) = self.selection_event(X_tr, a_tr, b_tr, z, mask_id)
+            print(selected_features_cv, detected_outliers_cv)
             l_list.append(l)
             u_list.append(u)
 
             X_tr = np.delete(X_tr, detected_outliers_cv, 0)
             a_tr = np.delete(a_tr, detected_outliers_cv)
             b_tr = np.delete(b_tr, detected_outliers_cv)
-
-            X_val = np.delete(X, mask, 0)
-            a_val = np.delete(a, mask)
-            b_val = np.delete(b, mask)
             num = X_val.shape[0]
-
             if len(selected_features_cv) == 0:
                 quadratic = [
                     a_val @ a_val / num,
@@ -408,6 +408,7 @@ class PipelineManager:
             )
             for index in self.candidates_indices
         ]
+        print(cross_validation_error_list)
         self.representeing_index = self.candidates_indices[
             np.argmin(cross_validation_error_list)
         ]
@@ -521,7 +522,6 @@ class PipelineManager:
                 z,
             )
             return (M, O), [l, u]
-
         l_list, u_list = [-np.inf], [np.inf]
         polynomial_list: list[Polynomial] = []
         for index in self.candidates_indices:
@@ -537,6 +537,7 @@ class PipelineManager:
             l_list.append(l)
             u_list.append(u)
 
+        print([quadratic(z) for quadratic in polynomial_list])
         best_index = np.argmin([quadratic(z) for quadratic in polynomial_list])
         best_quadratic = polynomial_list[best_index]
         for quadratic in polynomial_list:
