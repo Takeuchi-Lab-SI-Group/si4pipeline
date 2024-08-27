@@ -184,7 +184,7 @@ class Pipeline:
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
-        cross_validation_masks: list[list[int]],
+        cross_validation_masks: list[np.ndarray],
     ) -> float:
         """Compute the cross validation error."""
         X, y = feature_matrix, response_vector
@@ -366,6 +366,47 @@ class PipelineManager:
             self.pipelines.append(pipeline)
         self.representeing_index = 0
         self.tuned = False
+
+    def tune(
+        self,
+        feature_matrix: np.ndarray,
+        response_vector: np.ndarray,
+        *,
+        num_folds: int = 5,
+        max_candidates: int | None = None,
+        random_state: int | None = 0,
+    ) -> None:
+        """Tune to select the best data analysis pipeline using the cross validation."""
+        rng = np.random.default_rng(random_state)
+
+        if max_candidates is not None:
+            num_candidates = np.min([max_candidates, len(self.pipelines)])
+        else:
+            num_candidates = len(self.pipelines)
+        self.candidates_indices: list[int] = rng.choice(
+            len(self.pipelines),
+            num_candidates,
+            replace=False,
+        ).tolist()
+        self.candidates_indices.sort()
+
+        self.cross_validation_masks: list[np.ndarray] = np.array_split(
+            rng.permutation(len(response_vector)),
+            num_folds,
+        )
+
+        cross_validation_error_list = [
+            self.pipelines[index].cross_validation_error(
+                feature_matrix,
+                response_vector,
+                self.cross_validation_masks,
+            )
+            for index in self.candidates_indices
+        ]
+        self.representeing_index = self.candidates_indices[
+            np.argmin(cross_validation_error_list)
+        ]
+        self.tuned = True
 
     def __call__(
         self,
