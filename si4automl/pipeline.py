@@ -255,14 +255,6 @@ class PipelineManager:
         for pipeline in self.pipelines:
             pipeline.reset_cache()
 
-    def __str__(self) -> str:
-        """Return the string representation of the PipelineManager object."""
-        return (
-            f"PipelineManager with {len(self.pipelines)} pipelines:\n"
-            "Representing pipelines:\n"
-            f"{self.pipelines[self.representeing_index]}"
-        )
-
     def __or__(self, other: PipelineManager) -> PipelineManager:
         """Merge the two PipelineManager objects."""
         manager = PipelineManager()
@@ -270,6 +262,14 @@ class PipelineManager:
         manager.representeing_index = 0
         manager.tuned = False
         return manager
+
+    def __str__(self) -> str:
+        """Return the string representation of the PipelineManager object."""
+        return (
+            f"PipelineManager with {len(self.pipelines)} Pipelines\n"
+            f"Representing Pipeline (index: {self.representeing_index})\n"
+            f"{self.pipelines[self.representeing_index]}"
+        )
 
 
 class Pipeline:
