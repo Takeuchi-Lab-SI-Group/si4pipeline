@@ -193,7 +193,7 @@ class Pipeline:
         #     imputer = layer.compute_imputer(X, y)
         # else:
         #     imputer = np.eye(len(y))
-        imputer = self.load_imputer(X, y)
+        imputer = self.compute_imputer(X, y)
         y = imputer @ y[~np.isnan(y)]
 
         error_list = []
@@ -304,24 +304,27 @@ class Pipeline:
                 )
         return None
 
-    def load_imputer(
+    def compute_imputer(
         self,
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
     ) -> np.ndarray:
-        """Compute the imputer matrix."""
-        if self.imputer is None:
-            layer = self.layers[self.static_order[1]]
-            if isinstance(layer, MissingImputation):
-                self.imputer = layer.compute_imputer(feature_matrix, response_vector)
-            else:
-                self.imputer = np.eye(len(response_vector))
+        """Compute the imputer matrix based on the data analysis pipeline."""
+        layer = self.layers[self.static_order[1]]
+        if isinstance(layer, MissingImputation):
+            self.imputer = layer.compute_imputer(feature_matrix, response_vector)
+        else:
+            self.imputer = np.eye(len(response_vector))
+        return self.imputer
+
+    def load_imputer(self) -> np.ndarray:
+        """Load the imputer matrix from the cache."""
+        assert self.imputer is not None
         return self.imputer
 
     def reset_cache(self) -> None:
         """Reset the cache of the Pipeline object."""
         self.cache_quadratic_cross_validation_error = {}
-        self.imputer = None
         for node in self.static_order:
             layer = self.layers[node]
             if isinstance(layer, FeatureSelection | OutlierDetection):
@@ -435,14 +438,16 @@ class PipelineManager:
         self.X = feature_matrix
 
         node = self.pipelines[self.representeing_index].static_order[1]
-        if node.type == "missing_imputation" and np.any(np.isnan(response_vector)):
+        self.exist_missing = np.any(np.isnan(response_vector))
+        if node.type == "missing_imputation" and self.exist_missing:
             self.missing_imputation_method = node.method
         else:
             self.missing_imputation_method = "none"
-        self.imputer = self.pipelines[self.representeing_index].load_imputer(
+        imputer = self.pipelines[self.representeing_index].compute_imputer(
             feature_matrix,
             response_vector,
         )
+        # print(self.pipelines[self.representeing_index].imputer)
         # if node.type == "missing_imputation":
         #     self.missing_imputation_method = node.method
         #     layer = self.pipelines[self.representeing_index].layers[node]
@@ -456,7 +461,7 @@ class PipelineManager:
         if sigma is None:
             residuals = (
                 (np.eye(len(y)) - X @ np.linalg.inv(X.T @ X) @ X.T)
-                @ self.imputer
+                @ imputer
                 @ y[~np.isnan(y)]
             )
             sigma = np.std(residuals, ddof=X.shape[1])
@@ -466,7 +471,7 @@ class PipelineManager:
         X_ = X_[:, self.M]  # shape (n - |O|, |M|)
         Im = np.delete(np.eye(n), self.O, 0)  # shape (n - |O|, n)
         etas = np.linalg.inv(X_.T @ X_) @ X_.T @ Im  # shape (|M|, n)
-        self.etas = etas @ self.imputer  # shape (|M|, n - num_missing)
+        self.etas = etas @ imputer  # shape (|M|, n - num_missing)
 
         if test_index is not None:
             self.etas = self.etas[test_index].reshape(1, -1)
@@ -474,7 +479,7 @@ class PipelineManager:
         # self.X, self.y = feature_matrix, response_vector
         results: list[SelectiveInferenceResult] = []
         for eta in self.etas:
-            self.reset_cache()
+            self.reset_cache_of_pipelines()
             si = SelectiveInferenceNorm(y[~np.isnan(y)], sigma**2.0, eta)
             results.append(si.inference(self._algorithm, self._model_selector))
 
@@ -503,16 +508,24 @@ class PipelineManager:
     ]:
         """Algorithm to perform the selective inference."""
         if not self.tuned:
-            a, b = self.imputer @ a, self.imputer @ b
+            imputer = self.pipelines[self.representeing_index].load_imputer()
             M, O, l, u = self.pipelines[self.representeing_index].selection_event(
                 self.X,
-                a,
-                b,
+                imputer @ a,
+                imputer @ b,
                 z,
                 mask_id=-1,
             )
             return (M, O), [l, u]
-
+        polynomial_list: list[Polynomial] = []
+        for index in self.candidates_indices:
+            # node = self.pipelines[index].static_order[1]
+            # if node.type == "missing_imputation" and self.exist_missing:
+            #     missing_imputation_method = node.method
+            # else:
+            #     missing_imputation_method = "none"
+            imputer = self.pipelines[index].load_imputer()
+            a_imputed, b_imputed = imputer @ a, imputer @ b
         raise ValueError
 
     def _model_selector(
@@ -533,7 +546,7 @@ class PipelineManager:
             # np.allclose(self.imputer, imputer)
         )
 
-    def reset_cache(self) -> None:
+    def reset_cache_of_pipelines(self) -> None:
         """Reset the cache of the all pipelines."""
         for pipeline in self.pipelines:
             pipeline.reset_cache()
