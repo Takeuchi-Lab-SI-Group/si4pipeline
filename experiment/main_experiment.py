@@ -7,14 +7,14 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from time import time
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 from sicore import SelectiveInferenceResult  # type: ignore[import]
 from sicore.core.base import InfiniteLoopError  # type: ignore[import]
 from tqdm import tqdm  # type: ignore[import]
 
-from experiment.managers import option1, option1_multi, option2, option2_multi
+from experiment.utils import Results, option1, option1_multi, option2, option2_multi
 
 current_dir = Path(__file__).resolve().parent
 sys.path.append(str(current_dir / ".."))
@@ -30,7 +30,6 @@ class ExperimentPipeline:
         num_results: int,
         num_worker: int,
         option: Literal["op1", "op2", "all_cv"],
-        inference_mode: Literal["parametric", "over_conditioning"],
         n: int,
         d: int,
         delta: float,
@@ -44,17 +43,16 @@ class ExperimentPipeline:
         self.n = n
         self.d = d
         self.delta = delta
-        self.inferece_mode = inference_mode
         self.seed = seed
 
     def experiment(
         self,
-        dataset: list[int],
-    ) -> list[tuple[SelectiveInferenceResult, float]]:
+        seeds: list[int],
+    ) -> list[tuple[float, float, float, float]]:
         """Conduct the experiment in parallel."""
         with ProcessPoolExecutor(max_workers=self.num_worker) as executor:
             results = list(
-                tqdm(executor.map(self.iter_experiment, dataset), total=self.num_iter),
+                tqdm(executor.map(self.iter_experiment, seeds), total=self.num_iter),
             )
         results = [result for result in results if result is not None]
         return results[: self.num_results]
@@ -62,11 +60,11 @@ class ExperimentPipeline:
     def iter_experiment(
         self,
         seed: int,
-    ) -> tuple[SelectiveInferenceResult, float] | None:
+    ) -> tuple[float, float, float, float] | None:
         """Iterate the experiment."""
         rng = np.random.default_rng(seed)
 
-        for _ in range(1000):  # repeat while true feature is not selected
+        for _ in range(1000):
             X = rng.normal(size=(self.n, self.d))
             noise = rng.normal(size=self.n)
             beta = np.zeros(self.d)
@@ -87,36 +85,48 @@ class ExperimentPipeline:
             M, _ = manager(X, y)
             if len(M) == 0:
                 continue
-            test_index = rng.choice(len(M))
+            test_index = int(rng.choice(len(M)))
             if self.delta != 0.0 and M[test_index] not in range(3):
                 continue
 
-            start = time()
             try:
+                start = time()
                 _, result = manager.inference(
                     X,
                     y,
                     1.0,
                     test_index=test_index,
                     retain_result=True,
-                    inference_mode=self.inferece_mode,
                 )
+                result = cast(SelectiveInferenceResult, result)
                 elapsed = time() - start
+                _, oc_p_value = manager.inference(
+                    X,
+                    y,
+                    1.0,
+                    test_index=test_index,
+                    inference_mode="over_conditioning",
+                )
+                oc_p_value = cast(float, oc_p_value)
             except InfiniteLoopError:
                 return None
             except Exception as e:  # noqa: BLE001
                 print(e)  # noqa: T201
                 return None
             else:
-                return result, elapsed
+                return result.p_value, result.naive_p_value(), oc_p_value, elapsed
         return None
 
     def run_experiment(self) -> None:
         """Conduct the experiments and save the results."""
         seeds = [5000 * (self.seed + 1) + i for i in range(self.num_iter)]
         full_results = self.experiment(seeds)
-        self.results = [result[0] for result in full_results]
-        self.times = [result[1] for result in full_results]
+        self.results = Results(
+            p_values=[result[0] for result in full_results],
+            naive_p_values=[result[1] for result in full_results],
+            oc_p_values=[result[2] for result in full_results],
+            times=[result[3] for result in full_results],
+        )
 
 
 if __name__ == "__main__":
@@ -138,7 +148,6 @@ if __name__ == "__main__":
         num_results=args.num_results,
         num_worker=args.num_worker,
         option=args.option,
-        inference_mode=args.inference_mode,
         n=args.n,
         d=args.d,
         delta=args.delta,
@@ -146,18 +155,10 @@ if __name__ == "__main__":
     )
     experiment.run_experiment()
 
-    if args.inference_mode == "over_conditioning":
-        dir_path = Path(f"results_{args.option}_oc")
-    else:
-        dir_path = Path(f"results_{args.option}")
+    dir_path = Path(f"results_{args.option}")
     if not dir_path.exists():
         dir_path.mkdir(parents=True)
 
     results_file_path = dir_path / f"{args.n}_{args.d}_{args.delta}_{args.seed}.pkl"
-    times_file_path = dir_path / f"times_{args.n}_{args.d}_{args.delta}_{args.seed}.pkl"
-
     with results_file_path.open("wb") as f:
         pickle.dump(experiment.results, f)
-
-    with times_file_path.open("wb") as f:
-        pickle.dump(experiment.times, f)

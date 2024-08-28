@@ -1,5 +1,11 @@
 """Module containing pipeline managers for experiments."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from typing_extensions import Self
+
 from si4automl import (
     PipelineManager,
     construct_pipelines,
@@ -16,6 +22,33 @@ from si4automl import (
     stepwise_feature_selection,
     union,
 )
+
+
+@dataclass
+class Results:
+    """Results dataclass for the data analysis pipeline."""
+
+    p_values: list[float] = field(default_factory=list)
+    naive_p_values: list[float] = field(default_factory=list)
+    oc_p_values: list[float] = field(default_factory=list)
+    times: list[float] = field(default_factory=list)
+
+    def __add__(self, other: Results) -> Results:
+        """Take union of two results."""
+        return Results(
+            p_values=self.p_values + other.p_values,
+            naive_p_values=self.naive_p_values + other.naive_p_values,
+            oc_p_values=self.oc_p_values + other.oc_p_values,
+            times=self.times + other.times,
+        )
+
+    def __iadd__(self, other: Self) -> Self:
+        """Take union of two results in place."""
+        self.p_values += other.p_values
+        self.naive_p_values += other.naive_p_values
+        self.oc_p_values += other.oc_p_values
+        self.times += other.times
+        return self
 
 
 def option1() -> PipelineManager:
