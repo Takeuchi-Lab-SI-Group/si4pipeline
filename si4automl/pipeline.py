@@ -347,7 +347,10 @@ class Pipeline:
                 case "start":
                     outputs[node] = (list(range(feature_matrix.shape[1])), [])
                 case "end":
-                    return outputs[parents[0]]
+                    selected_features, detected_outliers = outputs[parents[0]]
+                    selected_features.sort()
+                    detected_outliers.sort()
+                    return (selected_features, detected_outliers)
                 case "feature_extraction" | "outlier_removal":
                     outputs[node] = outputs[parents[0]]
                 case "missing_imputation":
@@ -404,7 +407,10 @@ class Pipeline:
                 case "start":
                     outputs[node] = (list(range(X.shape[1])), [], -np.inf, np.inf)
                 case "end":
-                    return outputs[parents[0]]
+                    selected_features, detected_outliers, l, u = outputs[parents[0]]
+                    selected_features.sort()
+                    detected_outliers.sort()
+                    return (selected_features, detected_outliers, l, u)
                 case "feature_extraction" | "outlier_removal" | "missing_imputation":
                     outputs[node] = outputs[parents[0]]
                 case "feature_selection" | "outlier_detection":
