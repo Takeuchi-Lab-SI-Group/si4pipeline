@@ -906,6 +906,7 @@ dependencies = [
     { name = "numpy" },
     { name = "scikit-learn" },
     { name = "sicore" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -913,7 +914,6 @@ dev = [
     { name = "ipykernel" },
     { name = "mypy" },
     { name = "ruff" },
-    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -921,6 +921,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "scikit-learn", specifier = ">=1.5.1" },
     { name = "sicore", specifier = ">=2.0.3" },
+    { name = "tqdm", specifier = ">=4.66.5" },
 ]
 
 [package.metadata.requires-dev]
@@ -928,7 +929,6 @@ dev = [
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "mypy", specifier = ">=1.11.1" },
     { name = "ruff", specifier = ">=0.6.2" },
-    { name = "tqdm", specifier = ">=4.66.5" },
 ]
 
 [[package]]

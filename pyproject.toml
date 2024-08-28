@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Package for statistical test for data analysis pipeline"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-dependencies = ["sicore>=2.0.3", "numpy>=1.26.4", "scikit-learn>=1.5.1"]
+dependencies = [
+    "sicore>=2.0.3",
+    "numpy>=1.26.4",
+    "scikit-learn>=1.5.1",
+    "tqdm>=4.66.5",
+]
 authors = [{ name = "Takeuchi Lab" }]
 maintainers = [{ name = "Tomohiro Shiraishi", email = "shirara1016@gmail.com" }]
 license = "MIT"
@@ -25,7 +30,6 @@ dev-dependencies = [
     "ruff>=0.6.2",
     "mypy>=1.11.1",
     "ipykernel>=6.29.5",
-    "tqdm>=4.66.5",
     # "sphinx>=8.0.2",
     # "furo>=2024.8.6",
 ]
@@ -37,12 +41,13 @@ extend-include = ["*.ipynb"]
 exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv"]
 select = ["ALL"]
 ignore = [
-    "E501",   # line too long
-    "E741",   # ambiguous variable name
-    "N803",   # argument name should be lowercase
-    "N806",   # variable in function should be lowercase
-    "S101",   # use of assert
-    "ERA001", # remove commented out code
+    # "E402",   # module level import not at top of file
+    "E501", # line too long
+    "E741", # ambiguous variable name
+    "N803", # argument name should be lowercase
+    "N806", # variable in function should be lowercase
+    "S101", # use of assert
+    # "ERA001", # remove commented out code
     # "PLR0912", # too many branches
     "PLR0913", # too many arguments in function definition
     # "PLR0915", # too many statements

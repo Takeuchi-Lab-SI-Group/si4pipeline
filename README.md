@@ -8,10 +8,11 @@ This package has the following dependencies:
     - numpy (version 1.26.4 or higher but lower than 2.0.0, we use 1.26.4)
     - scikit-learn (version 1.5.1 or higher, we use 1.5.1)
     - sicore (version 2.0.3 or higher, we use 2.0.3)
+    - tqdm (version 4.66.5 or higher, we use 4.66.5)
 
 To install this package, please run the following commands (dependencies will be installed automatically):
 ```bash
-pip install si4automl
+$ pip install si4automl
 ```
 
 ## Usage
