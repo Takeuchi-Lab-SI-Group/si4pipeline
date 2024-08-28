@@ -12,7 +12,7 @@ for option in op1 op2 all_cv; do
         for seed in {0..9}; do
             qsub \
             -v MYARGS="--seed $seed --n $n --d $d --option $option",MYFILE=$file \
-            execute.sh
+            shell/execute.sh
         done
     done
 done
