@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from graphlib import TopologicalSorter
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, TypeVar, cast
 
 
 @dataclass(frozen=True)
@@ -196,6 +196,9 @@ class OutlierDetectionConstructor:
         return DetectedOutliers(structure)
 
 
+T = TypeVar("T", SelectedFeatures, DetectedOutliers)
+
+
 class IndexOperationConstructor:
     """A class for constructing the abstract index operation."""
 
@@ -212,8 +215,8 @@ class IndexOperationConstructor:
             "intersection_features",
             "intersection_outliers",
         ],
-        *inputs: SelectedFeatures | DetectedOutliers,
-    ) -> SelectedFeatures | DetectedOutliers:
+        *inputs: T,
+    ) -> T:
         """Perform the index operation on the selected features or detected outliers."""
         assert all(type(inputs[0]) is type(input_) for input_ in inputs)
 
@@ -231,11 +234,11 @@ class IndexOperationConstructor:
         IndexOperationConstructor.counter.setdefault(name, 0)
         IndexOperationConstructor.counter[name] += 1
 
-        if "features" in name:
-            return SelectedFeatures(structure)
-        if "outliers" in name:
-            return DetectedOutliers(structure)
-        raise ValueError
+        match inputs[0]:
+            case SelectedFeatures():
+                return cast(T, SelectedFeatures(structure))
+            case DetectedOutliers():
+                return cast(T, DetectedOutliers(structure))
 
 
 class FeatureExtractionConstructor:

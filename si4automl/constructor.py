@@ -1,5 +1,7 @@
 """Module containing the constructor functions for the components of the data analysis pipeline."""
 
+from typing import TypeVar
+
 from si4automl.abstract import (
     DetectedOutliers,
     FeatureExtractionConstructor,
@@ -166,9 +168,10 @@ def soft_ipod(
     )
 
 
-def union(
-    *inputs: SelectedFeatures | DetectedOutliers,
-) -> SelectedFeatures | DetectedOutliers:
+T = TypeVar("T", SelectedFeatures, DetectedOutliers)
+
+
+def union(*inputs: T) -> T:
     """Perform the union operation on the selected features or detected outliers."""
     match inputs[0]:
         case SelectedFeatures():
@@ -177,9 +180,7 @@ def union(
             return IndexOperationConstructor()("union_outliers", *inputs)
 
 
-def intersection(
-    *inputs: SelectedFeatures | DetectedOutliers,
-) -> SelectedFeatures | DetectedOutliers:
+def intersection(*inputs: T) -> T:
     """Perform the intersection operation on the selected features or detected outliers."""
     match inputs[0]:
         case SelectedFeatures():
