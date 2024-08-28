@@ -372,8 +372,6 @@ class SoftIpod(OutlierDetection):
         num_data = list(range(X.shape[0]))
         num_outlier_data = [i for i in num_data if i not in O]
 
-        # soft-ipod
-        # outlier: list[int] = []
         n = X.shape[0]
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
@@ -420,8 +418,6 @@ class SoftIpod(OutlierDetection):
 
         num_data, n = list(range(X.shape[0])), X.shape[0]
         num_outlier_data = [i for i in num_data if i not in O]
-
-        # n = X.shape[0]
 
         hat_matrix = X @ np.linalg.inv(X.T @ X) @ X.T
         Px = np.identity(n) - hat_matrix
@@ -500,8 +496,6 @@ class SoftIpod(OutlierDetection):
         l, u = np.max(l_list).item(), np.min(u_list).item()
         assert l < z < u, "l < z < u is not satisfied"
 
-        # O_ = [num_outlier_data[i] for i in outlier]
-        # O = O + O_
         O = O + [num_outlier_data[i] for i in outlier]
 
         self.save_intervals(l, u, M, O, mask_id)

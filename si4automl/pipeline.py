@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 from numpy.polynomial import Polynomial
@@ -106,6 +106,7 @@ class PipelineManager:
         *,
         test_index: int | None = None,
         retain_result: bool = False,
+        inference_mode: Literal["parametric", "over_conditioning"] = "parametric",
     ) -> (
         tuple[list[int], list[float] | list[SelectiveInferenceResult]]
         | tuple[int, float | SelectiveInferenceResult]
@@ -149,7 +150,13 @@ class PipelineManager:
         for eta in self.etas:
             self._reset_cache_of_pipelines()
             si = SelectiveInferenceNorm(y[~np.isnan(y)], sigma**2.0, eta)
-            results.append(si.inference(self._algorithm, self._model_selector))
+            results.append(
+                si.inference(
+                    self._algorithm,
+                    self._model_selector,
+                    inference_mode=inference_mode,
+                ),
+            )
 
         match test_index, retain_result:
             case None, False:
@@ -162,7 +169,6 @@ class PipelineManager:
                 return test_index, results[0]
             case _, _:
                 raise ValueError
-
         raise ValueError
 
     def _algorithm(
@@ -450,7 +456,6 @@ class Pipeline:
             X_val, y_val = X[mask], y[mask]
             X_tr, y_tr = np.delete(X, mask, 0), np.delete(y, mask)
             M, O = self(X_tr, y_tr)
-            # print(M, O)
             X_tr, y_tr = np.delete(X_tr, O, 0), np.delete(y_tr, O)
             if len(M) == 0:
                 error_list.append(np.mean(y_val**2))
