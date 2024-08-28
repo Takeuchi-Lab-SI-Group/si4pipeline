@@ -1,243 +1,163 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
+"""Module for main experiments."""
 
 import argparse
-import os
-import sys
 import pickle
-
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["VECLIB_NUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
+import sys
+import warnings
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from time import time
+from typing import Literal
 
 import numpy as np
-from tqdm import tqdm
+from sicore import SelectiveInferenceResult  # type: ignore[import]
+from sicore.core.base import InfiniteLoopError  # type: ignore[import]
+from tqdm import tqdm  # type: ignore[import]
 
-from abc import ABCMeta, abstractmethod
-from concurrent.futures import ProcessPoolExecutor
+from experiment.managers import option1, option1_multi, option2, option2_multi
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(current_dir, ".."))
+current_dir = Path(__file__).resolve().parent
+sys.path.append(str(current_dir / ".."))
 
-import source.pipelineprocesser as plp
-
-
-def option1():
-    X, y = plp.make_dataset()
-    y = plp.mean_value_imputation(X, y)
-
-    O = plp.soft_ipod(X, y, 0.02)
-    X, y = plp.remove_outliers(X, y, O)
-
-    M = plp.marginal_screening(X, y, 5)
-    X = plp.extract_features(X, M)
-
-    M1 = plp.stepwise_feature_selection(X, y, 3)
-    M2 = plp.lasso(X, y, 0.08)
-    M = plp.union(M1, M2)
-    return plp.make_pipeline(output=M)
+warnings.simplefilter("ignore")
 
 
-def option1_cv():
-    X, y = plp.make_dataset()
-    y = plp.mean_value_imputation(X, y)
+class ExperimentPipeline:
+    """Experiment class for the data analysis pipeline."""
 
-    O = plp.soft_ipod(X, y, 0.02, {0.02, 0.018})
-    X, y = plp.remove_outliers(X, y, O)
-
-    M = plp.marginal_screening(X, y, 5, {3, 5})
-    X = plp.extract_features(X, M)
-
-    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
-    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
-    M = plp.union(M1, M2)
-    return plp.make_pipeline(output=M)
-
-
-def option2():
-    X, y = plp.make_dataset()
-    y = plp.definite_regression_imputation(X, y)
-
-    M = plp.marginal_screening(X, y, 5)
-    X = plp.extract_features(X, M)
-
-    O = plp.cook_distance(X, y, 3.0)
-    X, y = plp.remove_outliers(X, y, O)
-
-    M1 = plp.stepwise_feature_selection(X, y, 3)
-    M2 = plp.lasso(X, y, 0.08)
-    M = plp.intersection(M1, M2)
-    return plp.make_pipeline(output=M)
-
-
-def option2_cv():
-    X, y = plp.make_dataset()
-    y = plp.definite_regression_imputation(X, y)
-
-    M = plp.marginal_screening(X, y, 5, {3, 5})
-    X = plp.extract_features(X, M)
-
-    O = plp.cook_distance(X, y, 3.0, {2.0, 3.0})
-    X, y = plp.remove_outliers(X, y, O)
-
-    M1 = plp.stepwise_feature_selection(X, y, 3, {2, 3})
-    M2 = plp.lasso(X, y, 0.08, {0.08, 0.12})
-    M = plp.intersection(M1, M2)
-    return plp.make_pipeline(output=M)
-
-
-class PararellExperiment(metaclass=ABCMeta):
-    def __init__(self, num_iter: int, num_results: int, num_worker: int):
-        self.num_iter = num_iter
-        self.num_results = num_results
-        self.num_worker = num_worker
-
-    @abstractmethod
-    def iter_experiment(self, args) -> tuple:
-        pass
-
-    def experiment(self, dataset: list) -> list:
-        with ProcessPoolExecutor(max_workers=self.num_worker) as executor:
-            results = list(
-                tqdm(executor.map(self.iter_experiment, dataset), total=self.num_iter)
-            )
-        results = [result for result in results if result is not None]
-        return results[: self.num_results]
-
-    @abstractmethod
-    def run_experiment(self):
-        pass
-
-
-class ExperimentPipeline(PararellExperiment):
     def __init__(
         self,
         num_results: int,
         num_worker: int,
-        option: str,
+        option: Literal["op1", "op2", "all_cv"],
+        inference_mode: Literal["parametric", "over_conditioning"],
         n: int,
-        p: int,
+        d: int,
         delta: float,
-        oc: str,
         seed: int,
-    ):
-        super().__init__(
-            num_iter=int(num_results * 1.12),
-            num_results=num_results,
-            num_worker=num_worker,
-        )
+    ) -> None:
+        """Initialize the experiment."""
         self.num_results = num_results
+        self.num_iter = int(num_results * 1.1)
+        self.num_worker = num_worker
         self.option = option
         self.n = n
-        self.p = p
+        self.d = d
         self.delta = delta
-        self.oc = True if oc == "oc" else False
+        self.inferece_mode = inference_mode
         self.seed = seed
 
-    def iter_experiment(self, args) -> tuple:
-        seed = args
+    def experiment(
+        self,
+        dataset: list[int],
+    ) -> list[tuple[SelectiveInferenceResult, float]]:
+        """Conduct the experiment in parallel."""
+        with ProcessPoolExecutor(max_workers=self.num_worker) as executor:
+            results = list(
+                tqdm(executor.map(self.iter_experiment, dataset), total=self.num_iter),
+            )
+        results = [result for result in results if result is not None]
+        return results[: self.num_results]
+
+    def iter_experiment(
+        self,
+        seed: int,
+    ) -> tuple[SelectiveInferenceResult, float] | None:
+        """Iterate the experiment."""
         rng = np.random.default_rng(seed)
 
         for _ in range(1000):  # repeat while true feature is not selected
-            X = rng.normal(size=(self.n, self.p))
+            X = rng.normal(size=(self.n, self.d))
             noise = rng.normal(size=self.n)
-
-            beta = np.zeros(self.p)
+            beta = np.zeros(self.d)
             beta[:3] = self.delta
             y = X @ beta + noise
-            num_missing = rng.binomial(self.n, 0.03)
-            mask = rng.choice(self.n, num_missing, replace=False)
-            y[mask] = np.nan
+            nan_mask = rng.choice(self.n, rng.binomial(self.n, 0.03), replace=False)
+            y[nan_mask] = np.nan
 
-            pl = None
-            if self.option == "op1":
-                pl = option1()
-            elif self.option == "op2":
-                pl = option2()
-            else:
-                flag = True
-                if self.option == "op1cv":
-                    pl = option1_cv()
-                elif self.option == "op2cv":
-                    pl = option2_cv()
-                else:
-                    flag = False
-                if flag:
-                    pl.tune(X, y, n_iter=16, cv=5, random_state=seed)  # fix seed
+            match self.option:
+                case "op1":
+                    manager = option1()
+                case "op2":
+                    manager = option2()
+                case "all_cv":
+                    manager = option1_multi() | option2_multi()
+                    manager.tune(X, y, random_state=seed)
 
-            if pl is not None:
-                M, _ = pl(X, y)
-            else:
-                if self.option != "op12cv":
-                    raise ValueError("Invalid option")
-                pl = plp.make_pipelines(option1_cv(), option2_cv())
-                pl.tune(
-                    X, y, n_iters=[16, 16], cv=5, random_state=seed
-                )  # not n_iter but n_iters for MultiPipeline, fix seed
-                M, _ = pl(X, y)
-
+            M, _ = manager(X, y)
             if len(M) == 0:
                 continue
-            index = rng.choice(len(M))
-            if self.delta == 0.0 or M[index] in range(3):
-                try:
-                    _, result = pl.inference(
-                        X, y, 1.0, index, is_result=True, over_conditioning=self.oc
-                    )
-                    return result
-                except Exception as e:
-                    # print(e)
-                    return None
+            test_index = rng.choice(len(M))
+            if self.delta != 0.0 and M[test_index] not in range(3):
+                continue
+
+            start = time()
+            try:
+                _, result = manager.inference(
+                    X,
+                    y,
+                    1.0,
+                    test_index=test_index,
+                    retain_result=True,
+                    inference_mode=self.inferece_mode,
+                )
+                elapsed = time() - start
+            except InfiniteLoopError:
+                return None
+            except Exception as e:  # noqa: BLE001
+                print(e)  # noqa: T201
+                return None
+            else:
+                return result, elapsed
         return None
 
-    def run_experiment(self):
+    def run_experiment(self) -> None:
+        """Conduct the experiments and save the results."""
         seeds = [5000 * (self.seed + 1) + i for i in range(self.num_iter)]
-        self.results = self.experiment(seeds)
-        return None
+        full_results = self.experiment(seeds)
+        self.results = [result[0] for result in full_results]
+        self.times = [result[1] for result in full_results]
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_results", type=int, default=1000)
     parser.add_argument("--num_worker", type=int, default=32)
-    parser.add_argument(
-        "--option", type=str, default="none"
-    )  # op1 op2 op1cv op2cv op12cv
+    parser.add_argument("--option", type=str, default="op1")  # op1 op2 all_cv
     parser.add_argument("--n", type=int, default=200)
-    parser.add_argument("--p", type=int, default=20)
+    parser.add_argument("--d", type=int, default=20)
     parser.add_argument("--delta", type=float, default=0.0)
-    parser.add_argument("--oc", type=str, default="none")  # oc or none
+    parser.add_argument("--inference_mode", type=str, default="parametric")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    print(args.n, args.p, args.delta, args.seed)
+    print(args.option)  # noqa: T201
+    print(args.n, args.d, args.delta, args.seed)  # noqa: T201
 
     experiment = ExperimentPipeline(
         num_results=args.num_results,
         num_worker=args.num_worker,
         option=args.option,
+        inference_mode=args.inference_mode,
         n=args.n,
-        p=args.p,
+        d=args.d,
         delta=args.delta,
-        oc=args.oc,
         seed=args.seed,
     )
-
     experiment.run_experiment()
 
-    if args.oc == "oc":
-        result_path = f"results_{args.option}_oc"
+    if args.inference_mode == "over_conditioning":
+        dir_path = Path(f"results_{args.option}_oc")
     else:
-        result_path = f"results_{args.option}"
+        dir_path = Path(f"results_{args.option}")
+    if not dir_path.exists():
+        dir_path.mkdir(parents=True)
 
-    if not os.path.exists(result_path):
-        os.makedirs(result_path)
+    results_file_path = dir_path / f"{args.n}_{args.d}_{args.delta}_{args.seed}.pkl"
+    times_file_path = dir_path / f"times_{args.n}_{args.d}_{args.delta}_{args.seed}.pkl"
 
-    file_name = f"{args.n}_{args.p}_{args.delta}_{args.seed}.pkl"
-    print(args.n, args.p, args.delta, args.seed)
-    file_path = os.path.join(result_path, file_name)
-
-    with open(file_path, "wb") as f:
+    with results_file_path.open("wb") as f:
         pickle.dump(experiment.results, f)
+
+    with times_file_path.open("wb") as f:
+        pickle.dump(experiment.times, f)
