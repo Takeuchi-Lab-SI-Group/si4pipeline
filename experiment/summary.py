@@ -2,213 +2,42 @@
 
 import pickle
 from concurrent.futures import ProcessPoolExecutor
+from decimal import Decimal
 from itertools import product
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
-from sicore import SelectiveInferenceResult, rejection_rate  # type: ignore[import]
+from sicore import SummaryFigure, rejection_rate  # type: ignore[import]
 
 from experiment.utils import Results
-
-
-class SummaryFigure:
-    """A class plotting a summary figure of experiments.
-
-    Args:
-        title (str | None, optional): Title of the figure. Defaults to None.
-        xlabel (str | None, optional): Label of x-axis. Defaults to None.
-        ylabel (str | None, optional): Label of y-axis. Defaults to None.
-    """
-
-    def __init__(
-        self,
-        title: str | None = None,
-        xlabel: str | None = None,
-        ylabel: str | None = None,
-    ) -> None:
-        """Initialize a summary figure.
-
-        Args:
-            title (str | None, optional): Title of the figure. Defaults to None.
-            xlabel (str | None, optional): Label of x-axis. Defaults to None.
-            ylabel (str | None, optional): Label of y-axis. Defaults to None.
-        """
-        self.title = title
-        self.xlabel = xlabel
-        self.ylabel = ylabel
-        self.data: dict[str, list] = {}
-
-    def add_value(self, value: float, label: str, xloc: str | float) -> None:
-        """Add a value to the figure.
-
-        Args:
-            value (float): Value to be plotted.
-            label (str): Label corresponding to the value.
-                To note that the label well be shown in the given order.
-            xloc (str | float): Location of the value.
-                If str, it will be equally spaced in the given order.
-                If float, it will be the exact location.
-        """
-        self.data.setdefault(label, [])
-        self.data[label].append((xloc, value))
-        self.red_lines: list[tuple[float, str | None]] = []
-
-    def add_results(
-        self,
-        results: list[SelectiveInferenceResult] | list[float] | np.ndarray,
-        label: str,
-        xloc: str | float,
-        alpha: float = 0.05,
-        *,
-        naive: bool = False,
-        bonferroni: bool = False,
-        log_num_comparisons: float = 0.0,
-    ) -> None:
-        """Add rejection rate computed from the given results to the figure.
-
-        Args:
-            results (list[SelectiveInferenceResult] | list[float] | np.ndarray):
-                List of SelectiveInferenceResult objects or p-values.
-            label (str):
-                Label corresponding to the results.
-            xloc (str | float):
-                Location of the results.
-            alpha (float, optional): Significance level. Defaults to 0.05.
-            naive (bool, optional):
-                Whether to compute rejection rate of naive inference.
-                This option is available only when results are
-                SelectiveInferenceResult objects. Defaults to False.
-            bonferroni (bool, optional):
-                Whether to compute rejection rate with Bonferroni correction.
-                This option is available only when results are
-                SelectiveInferenceResult objects. Defaults to False.
-            log_num_comparisons (float, optional):
-                Logarithm of the number of comparisons for the Bonferroni correction.
-                This option is ignored when bonferroni is False.
-                Defaults to 0.0, which means no correction.
-        """
-        value = rejection_rate(
-            results,
-            alpha=alpha,
-            naive=naive,
-            bonferroni=bonferroni,
-            log_num_comparisons=log_num_comparisons,
-        )
-        self.add_value(value, label, xloc)
-
-    def add_red_line(self, value: float = 0.05, label: str | None = None) -> None:
-        """Add a red line at the specified value.
-
-        Args:
-            value (float): Value to be plotted as a red line. Defaults to 0.05.
-            label (str | None): Label of the red line. Defaults to None.
-        """
-        self.red_lines.append((value, label))
-
-    def plot(
-        self,
-        filepath: Path | str | None = None,
-        ylim: tuple[float, float] | None = (0.0, 1.0),
-        yticks: list[float] | None = None,
-        legend_loc: str | None = None,
-        fontsize: int = 10,
-    ) -> None:
-        """Plot the figure.
-
-        Args:
-            filepath (Path | str | None, optional):
-                File path. If `filepath` is given, the plotted figure
-                will be saved as a file. Defaults to None.
-            ylim (tuple[float, float] | None, optional):
-                Range of y-axis. Defaults to None.
-                If None, range of y-axis will be automatically determined.
-            yticks (list[float] | None, optional):
-                List of y-ticks. Defaults to None.
-                If None, y-ticks will be automatically determined.
-            legend_loc (str | None, optional):
-                Location of the legend. Defaults to None.
-                If None, the legend will be placed at the best location.
-            fontsize (int, optional):
-                Font size of the legend. Defaults to 10.
-        """
-        plt.rcParams.update({"font.size": fontsize})
-        if self.title is not None:
-            plt.title(self.title)
-        if self.xlabel is not None:
-            plt.xlabel(self.xlabel)
-        if self.ylabel is not None:
-            plt.ylabel(self.ylabel)
-
-        for label, xloc_value_list in self.data.items():
-            xlocs_, values_ = zip(*xloc_value_list, strict=True)
-            xlocs, values = np.array(xlocs_), np.array(values_)
-            if not all(isinstance(xloc, (str)) for xloc in xlocs):
-                values = values[np.argsort(xlocs)]
-                xlocs = np.sort(xlocs)
-            plt.plot(xlocs, values, label=label, marker="x")
-
-        for value, label_ in self.red_lines:
-            plt.plot(
-                xlocs,
-                [value] * len(xlocs),
-                color="red",
-                linestyle="--",
-                lw=0.5,
-                label=label_,
-            )
-        plt.xticks(xlocs)
-
-        if ylim is not None:
-            plt.ylim(ylim)
-        if yticks is not None:
-            plt.yticks(yticks)
-
-        plt.legend(frameon=False, loc=legend_loc)
-        if filepath is None:
-            plt.show()
-        else:
-            filename = str(filepath) if isinstance(filepath, Path) else filepath
-            plt.savefig(filename, transparent=True, bbox_inches="tight", pad_inches=0)
-        plt.clf()
-        plt.close()
 
 
 def plot_main(option: str, mode: str) -> None:
     """Plot the results of the experiments."""
     values: list[float]
+    ylabel, is_null, num_seeds = "Type I Error Rate", True, 4
     match mode:
         case "n":
             values = [100, 200, 300, 400]
             result_name = lambda value, seed: f"{value}_20_0.0_{seed}.pkl"  # noqa: E731
             fig_path = Path("figures/main") / f"fpr_{option}_n.pdf"
             xlabel = "number of samples"
-            ylabel = "Type I Error Rate"
-            is_null = True
-            num_seeds = 1
         case "d":
             values = [10, 20, 30, 40]
             result_name = lambda value, seed: f"200_{value}_0.0_{seed}.pkl"  # noqa: E731
             fig_path = Path("figures/main") / f"fpr_{option}_d.pdf"
             xlabel = "number of features"
-            ylabel = "Type I Error Rate"
-            is_null = True
-            num_seeds = 1
         case "delta":
             values = [0.2, 0.4, 0.6, 0.8]
             result_name = lambda value, seed: f"200_20_{value}_{seed}.pkl"  # noqa: E731
             fig_path = Path("figures/main") / f"tpr_{option}.pdf"
-            xlabel = "signal"
-            ylabel = "Power"
-            is_null = False
-            num_seeds = 1
+            xlabel, ylabel, is_null, num_seeds = "signal", "Power", False, 1
 
     figure = SummaryFigure(xlabel=xlabel, ylabel=ylabel)
     for value in values:
         results = Results()
         for seed in range(num_seeds):
-            dir_path = Path(f"results_{option}")
-            path = dir_path / result_name(value, seed)
+            path = Path(f"results_{option}") / result_name(value, seed)
             with path.open("rb") as f:
                 results += pickle.load(f)
         assert len(results.p_values) == num_seeds * 1000
@@ -219,7 +48,7 @@ def plot_main(option: str, mode: str) -> None:
             figure.add_results(results.naive_p_values, label="naive", xloc=value)
 
     if is_null:
-        figure.add_red_line()
+        figure.add_red_line(value=0.05, label="significance level")
 
     fig_path.parent.mkdir(parents=True, exist_ok=True)
     figure.plot(fig_path, fontsize=16, legend_loc="upper left")
@@ -266,8 +95,7 @@ def plot_real(option: str, key: str) -> None:
     for n in [100, 150, 200]:
         results = Results()
         for seed in range(num_seeds):
-            dir_path = Path("results_real")
-            path = dir_path / f"{option}_{key}_{n}_{seed}.pkl"
+            path = Path("results_real") / f"{option}_{key}_{n}_{seed}.pkl"
             with path.open("rb") as f:
                 results += pickle.load(f)
         assert len(results.p_values) == num_seeds * 1000
@@ -304,15 +132,62 @@ def print_real(option: str) -> None:
                     results += pickle.load(f)
             assert len(results.p_values) == num_seeds * 1000
 
-            tpr = rejection_rate(results.p_values, alpha=0.05)
-            oc_tpr = rejection_rate(results.oc_p_values, alpha=0.05)
-            string += rf" & \textbf{{{tpr:.2f}}}/{oc_tpr:.2f}"
+            tpr_ = rejection_rate(results.p_values, alpha=0.05)
+            oc_tpr_ = rejection_rate(results.oc_p_values, alpha=0.05)
+            tpr = Decimal(str(tpr_)).quantize(
+                Decimal("0.01"),
+                "ROUND_HALF_UP",
+            )
+            oc_tpr = Decimal(str(oc_tpr_)).quantize(
+                Decimal("0.01"),
+                "ROUND_HALF_UP",
+            )
+            string += rf" & \textbf{{{str(tpr)[1:]}}}/{str(oc_tpr)[1:]}"
         strings_list.append(string)
 
     strings_path = Path(f"figures/real/{option}.txt")
     strings_path.parent.mkdir(parents=True, exist_ok=True)
     with strings_path.open("w") as f:
         f.write("\n".join(strings_list))
+
+
+def plot_robust_non_gaussian(option: str, alpha: float = 0.05) -> None:
+    """Plot the results of the robustness experiments."""
+    figure = SummaryFigure(xlabel="Wasserstein Distance", ylabel="Type I Error Rate")
+    num_seeds = 1
+
+    for rv_name in ["skewnorm", "exponnorm", "gennormsteep", "gennormflat", "t"]:
+        for distance in [0.01, 0.02, 0.03]:
+            results = Results()
+            for seed in range(num_seeds):
+                path = (
+                    Path(f"results_robust/{rv_name}")
+                    / f"{option}_{distance}_{seed}.pkl"
+                )
+                with path.open("rb") as f:
+                    results += pickle.load(f)
+            assert len(results.p_values) == num_seeds * 1000
+            figure.add_results(
+                results.p_values,
+                label=rv_name,
+                xloc=distance,
+                alpha=alpha,
+            )
+    figure.add_red_line(value=alpha, label="significance level")
+
+    default_alpha = 0.05
+
+    fig_path = Path("figures/robust") / f"{option}_non_gaussian_{alpha:.2f}.pdf"
+    fig_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.plot(
+        fig_path,
+        fontsize=14,
+        legend_loc="upper left",
+        ylim=(0.0, 0.2) if alpha == default_alpha else (0.0, 0.04),
+        yticks=[0.0, 0.05, 0.10, 0.15, 0.2]
+        if alpha == default_alpha
+        else [0.0, 0.01, 0.02, 0.03, 0.04],
+    )
 
 
 if __name__ == "__main__":
@@ -336,3 +211,5 @@ if __name__ == "__main__":
         ):
             executor.submit(plot_real, *arg)
         executor.submit(print_real, "all_cv")
+        for arg_ in [("all_cv", 0.05), ("all_cv", 0.01)]:
+            executor.submit(plot_robust_non_gaussian, *arg_)
