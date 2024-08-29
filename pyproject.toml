@@ -30,6 +30,9 @@ dev-dependencies = [
     "ruff>=0.6.2",
     "mypy>=1.11.1",
     "ipykernel>=6.29.5",
+    "pandas>=2.2.2",
+    "openpyxl>=3.1.5",
+    "xlrd>=2.0.1",
     # "sphinx>=8.0.2",
     # "furo>=2024.8.6",
 ]
@@ -41,20 +44,13 @@ extend-include = ["*.ipynb"]
 exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv"]
 select = ["ALL"]
 ignore = [
-    # "E402",   # module level import not at top of file
-    "E501", # line too long
-    "E741", # ambiguous variable name
-    "N803", # argument name should be lowercase
-    "N806", # variable in function should be lowercase
-    "S101", # use of assert
-    "S301", # use of pickle
-    # "ERA001", # remove commented out code
-    # "PLR0912", # too many branches
+    "E501",    # line too long
+    "E741",    # ambiguous variable name
+    "N803",    # argument name should be lowercase
+    "N806",    # variable in function should be lowercase
+    "S101",    # use of assert
+    "S301",    # use of pickle
     "PLR0913", # too many arguments in function definition
-    # "PLR0915", # too many statements
-    # "C901",    # function too complex
-    "ISC001", # implicitly concatenated string (to avoid confliction)
-    "COM812", # missing trailing comma (to avoid confliction)
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -64,5 +60,3 @@ convention = "google"
 "experiment/*.py" = [
     "T201", # print statement
 ]
-
-# [tool.mypy]
