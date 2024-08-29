@@ -36,11 +36,11 @@ class RobustExperimentPipeline:
         d: int,
         robust_type: Literal[
             "estimated",
-            "t",
             "skewnorm",
+            "exponnorm",
             "gennormsteep",
             "gennormflat",
-            "exponnorm",
+            "t",
         ],
         distance: float,
         seed: int,
@@ -53,7 +53,7 @@ class RobustExperimentPipeline:
         self.n = n
         self.d = d
         self.robust_type = robust_type
-        if robust_type in ["t", "skewnorm", "gennormsteep", "gennormflat", "exponnorm"]:
+        if robust_type in ["skewnorm", "exponnorm", "gennormsteep", "gennormflat", "t"]:
             self.rv = generate_non_gaussian_rv(robust_type, distance)
         self.seed = seed
 
@@ -82,7 +82,7 @@ class RobustExperimentPipeline:
                 case "estimated":
                     y = rng.normal(size=self.n)
                     sigma = None
-                case "t" | "skewnorm" | "gennormsteep" | "gennormflat" | "exponnorm":
+                case "skewnorm" | "exponnorm" | "gennormsteep" | "gennormflat" | "t":
                     seed_ = rng.integers(0, 2**32 - 1)
                     y = self.rv.rvs(size=self.n, random_state=seed_)
                     sigma = 1.0
@@ -176,7 +176,7 @@ if __name__ == "__main__":
             results_file_path = (
                 dir_path / f"{args.option}_{args.n}_{args.d}_{args.seed}.pkl"
             )
-        case "t" | "skewnorm" | "gennormsteep" | "gennormflat" | "exponnorm":
+        case "skewnorm" | "exponnorm" | "gennormsteep" | "gennormflat" | "t":
             results_file_path = (
                 dir_path / f"{args.option}_{args.distance}_{args.seed}.pkl"
             )
