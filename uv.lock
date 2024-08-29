@@ -993,7 +993,7 @@ dev = [
 requires-dist = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "scikit-learn", specifier = ">=1.5.1" },
-    { name = "sicore", specifier = ">=2.0.4" },
+    { name = "sicore", specifier = ">=2.0.5" },
     { name = "tqdm", specifier = ">=4.66.5" },
 ]
 
@@ -1009,7 +1009,7 @@ dev = [
 
 [[package]]
 name = "sicore"
-version = "2.0.4"
+version = "2.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "joblib" },
@@ -1018,9 +1018,9 @@ dependencies = [
     { name = "numpy" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/02/91/4e19327b1c082dc38e8b2dbd2858e78754505efbaf0bd1b1257438629023/sicore-2.0.4.tar.gz", hash = "sha256:e4464b13ee9ec9e5114d0b7370a86101dd0160621e880421cf0966ce2154864c", size = 87107 }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/5b/49bf18fae4a511b4af6b2d2a8ba8fd0d3a7eb9ca4f51c80ff0b40d90f84c/sicore-2.0.5.tar.gz", hash = "sha256:f108a0abe58dd1069f579cdd2976e30d63c9a686fead91cbcdb510bc4987dc2f", size = 87477 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/9f/d9a1f8c68458b2c1e62743358a38543646bafe8af04dd3abfcf6f2646d6b/sicore-2.0.4-py3-none-any.whl", hash = "sha256:a2a3d3bb89c35986de09caaa8b6bad0a8ce5b89a9b0687ae021089f2dce93b3b", size = 24789 },
+    { url = "https://files.pythonhosted.org/packages/5a/dc/ea49a8d5ffbc5660061e4d8bf415ec57f7cef14c3136143879724ff67946/sicore-2.0.5-py3-none-any.whl", hash = "sha256:f8afd1accccefb4b0a301d96cd0cef30a7a73abcdf38e403805ffcb4e3b0e9d2", size = 25146 },
 ]
 
 [[package]]
