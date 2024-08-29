@@ -11,7 +11,6 @@ from typing import Literal, cast
 
 import numpy as np
 from sicore import SelectiveInferenceResult  # type: ignore[import]
-from sicore.core.base import InfiniteLoopError  # type: ignore[import]
 from tqdm import tqdm  # type: ignore[import]
 
 from experiment.utils import Results, option1, option1_multi, option2, option2_multi
@@ -22,7 +21,7 @@ sys.path.append(str(current_dir / ".."))
 warnings.simplefilter("ignore")
 
 
-class ExperimentPipeline:
+class MainExperimentPipeline:
     """Experiment class for the data analysis pipeline."""
 
     def __init__(
@@ -108,10 +107,8 @@ class ExperimentPipeline:
                     inference_mode="over_conditioning",
                 )
                 oc_p_value = cast(float, oc_p_value)
-            except InfiniteLoopError:
-                return None
             except Exception as e:  # noqa: BLE001
-                print(e)  # noqa: T201
+                print(e)
                 return None
             else:
                 return result.p_value, result.naive_p_value(), oc_p_value, elapsed
@@ -133,18 +130,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_results", type=int, default=1000)
     parser.add_argument("--num_worker", type=int, default=32)
-    parser.add_argument("--option", type=str, default="op1")  # op1 op2 all_cv
+    parser.add_argument("--option", type=str, default="none")
     parser.add_argument("--n", type=int, default=200)
     parser.add_argument("--d", type=int, default=20)
     parser.add_argument("--delta", type=float, default=0.0)
-    parser.add_argument("--inference_mode", type=str, default="parametric")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    print(args.option)  # noqa: T201
-    print(args.n, args.d, args.delta, args.seed)  # noqa: T201
+    print(args.option)
+    print(args.n, args.d, args.delta, args.seed)
 
-    experiment = ExperimentPipeline(
+    experiment = MainExperimentPipeline(
         num_results=args.num_results,
         num_worker=args.num_worker,
         option=args.option,
@@ -156,8 +152,7 @@ if __name__ == "__main__":
     experiment.run_experiment()
 
     dir_path = Path(f"results_{args.option}")
-    if not dir_path.exists():
-        dir_path.mkdir(parents=True)
+    dir_path.mkdir(parents=True, exist_ok=True)
 
     results_file_path = dir_path / f"{args.n}_{args.d}_{args.delta}_{args.seed}.pkl"
     with results_file_path.open("wb") as f:
