@@ -15,7 +15,7 @@ from experiment.utils import Results
 def plot_main(option: str, mode: str) -> None:
     """Plot the results of the experiments."""
     values: list[float]
-    ylabel, is_null, num_seeds = "Type I Error Rate", True, 9
+    ylabel, is_null, num_seeds = "Type I Error Rate", True, 10
     fig_path = Path("figures/main") / f"fpr_{option}_{mode}.pdf"
     match mode:
         case "n":
@@ -171,6 +171,7 @@ def plot_robust_non_gaussian(option: str, alpha: float = 0.05) -> None:
                 label=rv_name,
                 xloc=distance,
                 alpha=alpha,
+                confidence_level=0.95,
             )
     figure.add_red_line(value=alpha, label="significance level")
 
@@ -180,7 +181,7 @@ def plot_robust_non_gaussian(option: str, alpha: float = 0.05) -> None:
     fig_path.parent.mkdir(parents=True, exist_ok=True)
     figure.plot(
         fig_path,
-        fontsize=14,
+        fontsize=13,
         legend_loc="upper left",
         ylim=(0.0, 0.2) if alpha == default_alpha else (0.0, 0.04),
         yticks=[0.0, 0.05, 0.10, 0.15, 0.2]
@@ -193,7 +194,7 @@ def plot_robust_estimated(option: str, mode: str) -> None:
     """Plot the results of the robustness experiments for estimated variance."""
     match mode:
         case "n":
-            values = [100, 200, 300]
+            values = [100, 200, 300, 400]
             result_name = lambda value, seed: f"{option}_{value}_20_{seed}.pkl"
             fig_path = Path("figures/robust") / f"{option}_estimated_n.pdf"
             xlabel = "number of samples"
@@ -218,6 +219,7 @@ def plot_robust_estimated(option: str, mode: str) -> None:
                 label=f"alpha={alpha:.2f}",
                 xloc=value,
                 alpha=alpha,
+                confidence_level=0.95,
             )
 
     figure.add_red_line(value=0.05, label="significance levels")
@@ -228,7 +230,7 @@ def plot_robust_estimated(option: str, mode: str) -> None:
     fig_path.parent.mkdir(parents=True, exist_ok=True)
     figure.plot(
         fig_path,
-        fontsize=16,
+        fontsize=13,
         legend_loc="upper left",
         ylim=(0.0, 0.2),
         yticks=[0.0, 0.01, 0.05, 0.10, 0.15, 0.2],
