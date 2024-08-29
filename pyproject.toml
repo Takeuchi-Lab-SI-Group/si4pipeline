@@ -59,4 +59,5 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "experiment/*.py" = [
     "T201", # print statement
+    "E731", # do not assign a lambda expression, use a def
 ]
