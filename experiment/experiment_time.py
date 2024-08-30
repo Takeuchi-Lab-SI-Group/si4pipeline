@@ -14,7 +14,7 @@ from sicore import SelectiveInferenceResult  # type: ignore[import]
 from tqdm import tqdm  # type: ignore[import]
 
 from experiment.utils import (
-    FullResults,
+    Results,
     option1,
     option1_parallel,
     option1_serial,
@@ -118,7 +118,7 @@ class TimeExperimentPipeline:
         """Conduct the experiments and save the results."""
         seeds = [5000 * (self.seed + 1) + i for i in range(self.num_iter)]
         full_results = self.experiment(seeds)
-        self.results = FullResults(
+        self.results = Results(
             results=[result[0] for result in full_results],
             oc_p_values=[result[1] for result in full_results],
             times=[result[2] for result in full_results],
@@ -127,7 +127,7 @@ class TimeExperimentPipeline:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_results", type=int, default=100)
+    parser.add_argument("--num_results", type=int, default=1000)
     parser.add_argument("--num_worker", type=int, default=32)
     parser.add_argument("--option", type=str, default="none")
     parser.add_argument("--n", type=int, default=800)

@@ -51,6 +51,10 @@ class Results:
         self.times += other.times
         return self
 
+    def __len__(self) -> int:
+        """Return the length of the results."""
+        return len(self.results)
+
 
 def option1() -> PipelineManager:
     """Pipeline manager for only one option 1 pipeline."""

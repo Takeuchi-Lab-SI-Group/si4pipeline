@@ -45,7 +45,7 @@ class RealExperimentPipeline:
     def experiment(
         self,
         args: list[tuple[np.ndarray, np.ndarray, int]],
-    ) -> list[tuple[float, float, float, float]]:
+    ) -> list[tuple[SelectiveInferenceResult, float, float]]:
         """Conduct the experiment in parallel."""
         with ProcessPoolExecutor(max_workers=self.num_worker) as executor:
             results = list(
@@ -57,7 +57,7 @@ class RealExperimentPipeline:
     def iter_experiment(
         self,
         args: tuple[np.ndarray, np.ndarray, int],
-    ) -> tuple[float, float, float, float] | None:
+    ) -> tuple[SelectiveInferenceResult, float, float] | None:
         """Iterate the experiment."""
         X, y, seed = args
         rng = np.random.default_rng(seed)
@@ -99,7 +99,7 @@ class RealExperimentPipeline:
             print(e)
             return None
         else:
-            return result.p_value, result.naive_p_value(), oc_p_value, elapsed
+            return result, oc_p_value, elapsed
 
     def run_experiment(self) -> None:
         """Conduct the experiments and save the results."""
@@ -117,10 +117,9 @@ class RealExperimentPipeline:
 
         full_results = self.experiment(args)
         self.results = Results(
-            p_values=[result[0] for result in full_results],
-            naive_p_values=[result[1] for result in full_results],
-            oc_p_values=[result[2] for result in full_results],
-            times=[result[3] for result in full_results],
+            results=[result[0] for result in full_results],
+            oc_p_values=[result[1] for result in full_results],
+            times=[result[2] for result in full_results],
         )
 
 
@@ -129,7 +128,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_results", type=int, default=1000)
     parser.add_argument("--num_worker", type=int, default=32)
     parser.add_argument("--option", type=str, default="all_cv")
-    parser.add_argument("--n", type=int, default=200)
+    parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--key", type=str, default="none")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
