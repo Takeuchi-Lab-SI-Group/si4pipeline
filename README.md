@@ -4,7 +4,7 @@ The tequnical details are described in the paper "[Statistical Test for Data Ana
 
 ## Installation & Requirements
 This package has the following dependencies:
-- Python (version 3.10 or higher, we use 3.10.12)
+- Python (version 3.10 or higher, we use 3.12.5)
     - numpy (version 1.26.4 or higher but lower than 2.0.0, we use 1.26.4)
     - scikit-learn (version 1.5.1 or higher, we use 1.5.1)
     - sicore (version 2.0.3 or higher, we use 2.0.3)
