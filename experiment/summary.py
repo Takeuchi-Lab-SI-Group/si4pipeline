@@ -57,33 +57,61 @@ def plot_time(mode: str) -> None:
     """Plot the computation time of the experiments."""
     match mode:
         case "n":
-            values = [100, 200, 300, 400]
-            result_name = lambda value, seed: f"{value}_20_0.0_{seed}.pkl"
-            fig_path = Path("figures/time") / "time_n.pdf"
+            values = [400, 800, 1200, 1600]
+            result_name = lambda option, value, seed: f"{option}_{value}_80_{seed}.pkl"
             xlabel = "number of samples"
         case "d":
-            values = [10, 20, 30, 40]
-            result_name = lambda value, seed: f"200_{value}_0.0_{seed}.pkl"
-            fig_path = Path("figures/time") / "time_d.pdf"
+            values = [40, 80, 120, 160]
+            result_name = lambda option, value, seed: f"{option}_800_{value}_{seed}.pkl"
             xlabel = "number of features"
 
     num_seeds = 1
-    figure = SummaryFigure(xlabel=xlabel, ylabel="Computation Time (s)")
+    figure_time = SummaryFigure(xlabel=xlabel, ylabel="Computation Time (s)")
+    figure_num = SummaryFigure(xlabel=xlabel, ylabel="Number of Intervals")
+    figure_per_time = SummaryFigure(
+        xlabel=xlabel,
+        ylabel="Computation Time per Interval (s)",
+    )
 
     for value in values:
-        for option in ["op1", "op2", "all_cv"]:
+        for option in ["op1", "op1_parallel"]:
             results = Results()
             for seed in range(num_seeds):
-                dir_path = Path(f"results_{option}")
-                path = dir_path / result_name(value, seed)
+                dir_path = Path("results_time")
+                path = dir_path / result_name(option, value, seed)
                 with path.open("rb") as f:
                     results += pickle.load(f)
-            assert len(results.times) == num_seeds * 1000
+            assert len(results.times) == num_seeds * 100
 
-            figure.add_value(np.mean(results.times).item(), xloc=value, label=option)
+            times = np.array(results.times)
+            num_intervals = np.array(
+                [result.search_count for result in results.results],
+            )
+            figure_time.add_value(
+                np.mean(times).item(),
+                xloc=value,
+                label=option,
+            )
+            figure_num.add_value(
+                np.mean(num_intervals).item(),
+                xloc=value,
+                label=option,
+            )
+            figure_per_time.add_value(
+                np.mean(times / num_intervals).item(),
+                xloc=value,
+                label=option,
+            )
 
-    fig_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.plot(fig_path, fontsize=16, ylim=None)
+    fig_dir = Path("figures/time")
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    for name, figure in zip(
+        ["time", "num", "per_time"],
+        [figure_time, figure_num, figure_per_time],
+        strict=True,
+    ):
+        fig_path = fig_dir / f"{name}_{mode}.pdf"
+        figure.plot(fig_path, fontsize=16, legend_loc="upper left", ylim=None)
 
 
 def plot_real(option: str, key: str) -> None:
@@ -152,8 +180,8 @@ def print_real(option: str) -> None:
 
 def plot_robust_non_gaussian(option: str, alpha: float = 0.05) -> None:
     """Plot the results of the robustness experiments for non-Gaussian noise."""
+    num_seeds = 5
     figure = SummaryFigure(xlabel="Wasserstein Distance", ylabel="Type I Error Rate")
-    num_seeds = 1
 
     for rv_name in ["skewnorm", "exponnorm", "gennormsteep", "gennormflat", "t"]:
         for distance in [0.01, 0.02, 0.03, 0.04]:
@@ -171,7 +199,6 @@ def plot_robust_non_gaussian(option: str, alpha: float = 0.05) -> None:
                 label=rv_name,
                 xloc=distance,
                 alpha=alpha,
-                confidence_level=0.95,
             )
     figure.add_red_line(value=alpha, label="significance level")
 
@@ -203,7 +230,7 @@ def plot_robust_estimated(option: str, mode: str) -> None:
             result_name = lambda value, seed: f"{option}_200_{value}_{seed}.pkl"
             xlabel = "number of features"
 
-    num_seeds = 1
+    num_seeds = 5
     figure = SummaryFigure(xlabel=xlabel, ylabel="Type I Error Rate")
     for value in values:
         results = Results()
@@ -219,7 +246,6 @@ def plot_robust_estimated(option: str, mode: str) -> None:
                 label=f"alpha={alpha:.2f}",
                 xloc=value,
                 alpha=alpha,
-                confidence_level=0.95,
             )
 
     figure.add_red_line(value=0.05, label="significance levels")
