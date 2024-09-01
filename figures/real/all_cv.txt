@@ -1,0 +1,3 @@
+$n=100$ & \textbf{.54}/.10 & \textbf{.50}/.08 & \textbf{.68}/.10 & \textbf{.29}/.05 & \textbf{.25}/.06 & \textbf{.33}/.06 & \textbf{.48}/.06 & \textbf{.58}/.06
+$n=150$ & \textbf{.70}/.11 & \textbf{.60}/.11 & \textbf{.72}/.13 & \textbf{.38}/.06 & \textbf{.34}/.06 & \textbf{.49}/.05 & \textbf{.71}/.08 & \textbf{.72}/.05
+$n=200$ & \textbf{.78}/.17 & \textbf{.66}/.12 & \textbf{.76}/.14 & \textbf{.48}/.06 & \textbf{.40}/.06 & \textbf{.67}/.07 & \textbf{.79}/.08 & \textbf{.83}/.06
