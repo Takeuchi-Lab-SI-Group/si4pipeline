@@ -219,7 +219,7 @@ def plot_time(mode: str) -> None:
     )
 
     for value in values:
-        for option in ["op1"]:  # TODO(shirara): add op1_parallel and op1_serial
+        for option in ["op1", "op1_parallel", "op1_serial"]:
             results = Results()
             for seed in range(num_seeds):
                 dir_path = Path("results_time")
@@ -261,26 +261,26 @@ def plot_time(mode: str) -> None:
 
 if __name__ == "__main__":
     with ProcessPoolExecutor(max_workers=32) as executor:
-        for option, mode in product(["op1", "op2"], ["delta"]):  # TODO(shirara):
+        for option, mode in product(["op1", "op2", "all_cv"], ["n", "d", "delta"]):
             executor.submit(plot_main, *(option, mode))
-        # for arg in product(
-        #     ["all_cv"],
-        #     [
-        #         "heating_load",
-        #         "cooling_load",
-        #         "gas_turbine",
-        #         "red_wine",
-        #         "white_wine",
-        #         "abalone",
-        #         "concrete",
-        #         "housing",
-        #     ],
-        # ):
-        #     executor.submit(plot_real, *arg)
-        # executor.submit(print_real, "all_cv")
-        # for arg_ in [("all_cv", 0.05), ("all_cv", 0.01)]:
-        #     executor.submit(plot_robust_non_gaussian, *arg_)
-        # for arg in product(["all_cv"], ["n", "d"]):
-        #     executor.submit(plot_robust_estimated, *arg)
+        for mode, key in product(
+            ["all_cv"],
+            [
+                "heating_load",
+                "cooling_load",
+                "gas_turbine",
+                "red_wine",
+                "white_wine",
+                "abalone",
+                "concrete",
+                "housing",
+            ],
+        ):
+            executor.submit(plot_real, *(mode, key))
+        executor.submit(print_real, "all_cv")
+        for option, alpha in product(["all_cv"], [0.05, 0.01]):
+            executor.submit(plot_robust_non_gaussian, *(option, alpha))
+        for arg in product(["all_cv"], ["n", "d"]):
+            executor.submit(plot_robust_estimated, *arg)
         for mode in ["n", "d"]:
             executor.submit(plot_time, mode)
