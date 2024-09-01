@@ -89,6 +89,9 @@ class StepwiseFeatureSelection(FeatureSelection):
         detected_outliers: list[int],
     ) -> list[int]:
         """Perform the feature selection."""
+        if self.parameter >= len(selected_features):
+            return selected_features
+
         X, y = feature_matrix, response_vector
         M, O = selected_features, detected_outliers
 
@@ -144,6 +147,9 @@ class StepwiseFeatureSelection(FeatureSelection):
         results = self.load_intervals(z, l, u, mask_id)
         if results is not None:
             return results
+
+        if self.parameter >= len(selected_features):
+            return selected_features, detected_outliers, l, u
 
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
@@ -238,6 +244,9 @@ class MarginalScreening(FeatureSelection):
         detected_outliers: list[int],
     ) -> list[int]:
         """Perform the feature selection."""
+        if self.parameter >= len(selected_features):
+            return selected_features
+
         X, y = feature_matrix, response_vector
         M, O = selected_features, detected_outliers
 
@@ -269,6 +278,9 @@ class MarginalScreening(FeatureSelection):
         results = self.load_intervals(z, l, u, mask_id)
         if results is not None:
             return results
+
+        if self.parameter >= len(selected_features):
+            return selected_features, detected_outliers, l, u
 
         X, y = feature_matrix, a + b * z
         M, O = selected_features, detected_outliers
