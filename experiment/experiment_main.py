@@ -61,7 +61,9 @@ class MainExperimentPipeline:
         seed: int,
     ) -> tuple[SelectiveInferenceResult, float, float] | None:
         """Iterate the experiment."""
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(
+            [seed, self.n, self.d, int(10 * self.delta), self.seed],
+        )
 
         for _ in range(1000):
             X = rng.normal(size=(self.n, self.d))
@@ -116,8 +118,7 @@ class MainExperimentPipeline:
 
     def run_experiment(self) -> None:
         """Conduct the experiments and save the results."""
-        seeds = [5000 * (self.seed + 1) + i for i in range(self.num_iter)]
-        full_results = self.experiment(seeds)
+        full_results = self.experiment(list(range(self.num_iter)))
         self.results = Results(
             results=[result[0] for result in full_results],
             oc_p_values=[result[1] for result in full_results],

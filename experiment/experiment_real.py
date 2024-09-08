@@ -60,7 +60,7 @@ class RealExperimentPipeline:
     ) -> tuple[SelectiveInferenceResult, float, float] | None:
         """Iterate the experiment."""
         X, y, seed = args
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng([seed, self.seed])
 
         match self.option:
             case "op1":
@@ -69,7 +69,7 @@ class RealExperimentPipeline:
                 manager = option2()
             case "all_cv":
                 manager = option1_multi() | option2_multi()
-                manager.tune(X, y, random_state=seed)
+                manager.tune(X, y, random_state=rng.integers(2**32))
 
         M, _ = manager(X, y)
         if len(M) == 0:
@@ -110,8 +110,7 @@ class RealExperimentPipeline:
 
         args = []
         rng = np.random.default_rng(self.seed)
-        seeds = [2000 * (self.seed + 1) + i for i in range(self.num_iter)]
-        for seed in seeds:
+        for seed in range(self.num_iter):
             index = rng.choice(X.shape[0], size=self.n, replace=False)
             args.append((X[index, :], y[index], seed))
 
