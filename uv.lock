@@ -456,15 +456,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mpmath"
-version = "1.3.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/47/dd32fa426cc72114383ac549964eecb20ecfd886d1e5ccf5340b55b02f57/mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f", size = 508106 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c", size = 536198 },
-]
-
-[[package]]
 name = "mypy"
 version = "1.11.2"
 source = { registry = "https://pypi.org/simple" }
@@ -970,7 +961,7 @@ wheels = [
 
 [[package]]
 name = "si4automl"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -993,7 +984,7 @@ dev = [
 requires-dist = [
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "scikit-learn", specifier = ">=1.5.1" },
-    { name = "sicore", specifier = ">=2.0.5" },
+    { name = "sicore", specifier = ">=2.1.0" },
     { name = "tqdm", specifier = ">=4.66.5" },
 ]
 
@@ -1009,18 +1000,17 @@ dev = [
 
 [[package]]
 name = "sicore"
-version = "2.0.5"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "joblib" },
     { name = "matplotlib" },
-    { name = "mpmath" },
     { name = "numpy" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/5b/49bf18fae4a511b4af6b2d2a8ba8fd0d3a7eb9ca4f51c80ff0b40d90f84c/sicore-2.0.5.tar.gz", hash = "sha256:f108a0abe58dd1069f579cdd2976e30d63c9a686fead91cbcdb510bc4987dc2f", size = 87477 }
+sdist = { url = "https://files.pythonhosted.org/packages/00/55/14180f1f786da886fb21a3eaa21c7a796e2cfcbed6e62b033b6097847543/sicore-2.1.0.tar.gz", hash = "sha256:1a1c0bff849feafda7db5c0b393dc33d7226c52ee20765d326d63ca0b65aee84", size = 86760 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/dc/ea49a8d5ffbc5660061e4d8bf415ec57f7cef14c3136143879724ff67946/sicore-2.0.5-py3-none-any.whl", hash = "sha256:f8afd1accccefb4b0a301d96cd0cef30a7a73abcdf38e403805ffcb4e3b0e9d2", size = 25146 },
+    { url = "https://files.pythonhosted.org/packages/f4/c3/7cf525208f7e0ddcba3186fdd7b016da1892bd6700cde9b726d3569eab1a/sicore-2.1.0-py3-none-any.whl", hash = "sha256:c411c9d505217bdb7471656d9b8e0eadc3d3bfcdfa04e18694507696e82ba635", size = 24565 },
 ]
 
 [[package]]

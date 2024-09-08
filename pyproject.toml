@@ -1,11 +1,11 @@
 [project]
 name = "si4automl"
-version = "0.1.0"
-description = "Package for statistical test for data analysis pipeline"
+version = "1.0.0"
+description = "Package for statistical test for data analysis pipeline by selective inference"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 dependencies = [
-    "sicore>=2.0.5",
+    "sicore>=2.1.0",
     "numpy>=1.26.4",
     "scikit-learn>=1.5.1",
     "tqdm>=4.66.5",
@@ -23,7 +23,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.sdist]
-exclude = [".vscode"]
+exclude = [".vscode", "shell", "experiment", "*.ipynb", "figures"]
 
 [tool.uv]
 dev-dependencies = [

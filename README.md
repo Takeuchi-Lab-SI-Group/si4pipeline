@@ -16,6 +16,5 @@ $ pip install si4automl
 ```
 
 ## Usage
-
 The implementation we developed can be interactively executed using the provided `demonstration.ipynb` file.
 This file contains a step-by-step guide on how to use the package, how to construct a data analysis pipeline, and how to apply the proposed method to a given data analysis pipeline.
