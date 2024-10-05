@@ -5,7 +5,7 @@
 #PBS -j oe
 #PBS -o path_for_logs
 #PBS -N pipeline
-#PBS -q cpu1-3
+#PBS -q cpu-f01
 #PBS -l select=1:ncpus=32:mem=128gb:ompthreads=1
 
 export OMP_NUM_THREADS=1
