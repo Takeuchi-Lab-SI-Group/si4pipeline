@@ -1,0 +1,8 @@
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+*__pycache__*
+
+path_for_*
+results*
