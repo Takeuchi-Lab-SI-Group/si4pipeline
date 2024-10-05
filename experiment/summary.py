@@ -50,7 +50,7 @@ def plot_main(option: str, mode: str) -> None:
         figure.add_red_line(value=0.05, label="significance level")
 
     fig_path.parent.mkdir(parents=True, exist_ok=True)
-    figure.plot(fig_path, fontsize=16, legend_loc="upper left")
+    figure.plot(fig_path, fontsize=24, legend_loc="upper left", yticks=[0.0, 0.5, 1.0])
 
 
 def plot_real(option: str, key: str) -> None:
