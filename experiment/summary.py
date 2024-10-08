@@ -2,7 +2,6 @@
 
 import pickle
 from concurrent.futures import ProcessPoolExecutor
-from decimal import Decimal
 from itertools import product
 from pathlib import Path
 
@@ -77,14 +76,14 @@ def print_real(option: str) -> None:
     """Print the results of the real data experiments."""
     num_seeds = 1
     keys = [
+        "airfoil",
+        "concrete",
         "heating_load",
         "cooling_load",
         "gas_turbine",
+        "housing",
         "red_wine",
         "white_wine",
-        "abalone",
-        "concrete",
-        "housing",
     ]
     strings_list = []
     for n in [100, 150, 200]:
@@ -99,15 +98,8 @@ def print_real(option: str) -> None:
 
             tpr_ = rejection_rate(results.results, alpha=0.05)
             oc_tpr_ = rejection_rate(results.oc_p_values, alpha=0.05)
-            tpr = Decimal(str(tpr_)).quantize(
-                Decimal("0.01"),
-                "ROUND_HALF_UP",
-            )
-            oc_tpr = Decimal(str(oc_tpr_)).quantize(
-                Decimal("0.01"),
-                "ROUND_HALF_UP",
-            )
-            string += rf" & \textbf{{{str(tpr)[1:]}}}/{str(oc_tpr)[1:]}"
+            tpr, oc_tpr = f"{tpr_:.2f}"[1:], f"{oc_tpr_:.2f}"[1:]
+            string += rf" & \textbf{{{tpr}}}/{oc_tpr}"
         strings_list.append(string)
 
     strings_path = Path(f"figures/real/{option}.txt")
@@ -199,7 +191,7 @@ def plot_robust_estimated(option: str, mode: str) -> None:
 
 
 def plot_time(mode: str) -> None:
-    """Plot the computation time of the experiments."""
+    """Plot the computational time of the experiments."""
     match mode:
         case "n":
             values = [400, 800, 1200, 1600]
@@ -211,11 +203,11 @@ def plot_time(mode: str) -> None:
             xlabel = "number of features"
 
     num_seeds = 1
-    figure_time = SummaryFigure(xlabel=xlabel, ylabel="Computation Time (s)")
+    figure_time = SummaryFigure(xlabel=xlabel, ylabel="Computational Time (s)")
     figure_num = SummaryFigure(xlabel=xlabel, ylabel="Number of Intervals")
     figure_per_time = SummaryFigure(
         xlabel=xlabel,
-        ylabel="Computation Time per Interval (s)",
+        ylabel="Computational Time per Interval (s)",
     )
 
     for value in values:
@@ -274,6 +266,7 @@ if __name__ == "__main__":
                 "abalone",
                 "concrete",
                 "housing",
+                "airfoil",
             ],
         ):
             executor.submit(plot_real, *(mode, key))
