@@ -107,6 +107,7 @@ class PipelineManager:
         test_index: int | None = None,
         retain_result: bool = False,
         inference_mode: Literal["parametric", "over_conditioning"] = "parametric",
+        n_jobs: int = 1,
     ) -> (
         tuple[list[int], list[float] | list[SelectiveInferenceResult]]
         | tuple[int, float | SelectiveInferenceResult]
@@ -155,6 +156,7 @@ class PipelineManager:
                     self._algorithm,
                     self._model_selector,
                     inference_mode=inference_mode,
+                    n_jobs=n_jobs,
                 ),
             )
 
