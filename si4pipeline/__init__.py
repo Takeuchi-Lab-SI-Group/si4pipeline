@@ -1,6 +1,6 @@
 """Package for statstical test for data analysis pipeline."""
 
-from si4automl.constructor import (
+from si4pipeline.constructor import (
     chebyshev_imputation,
     construct_pipelines,
     cook_distance,
@@ -19,7 +19,7 @@ from si4automl.constructor import (
     stepwise_feature_selection,
     union,
 )
-from si4automl.pipeline import PipelineManager
+from si4pipeline.pipeline import PipelineManager
 
 __all__ = [
     "initialize_dataset",

@@ -3,21 +3,21 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from si4automl.abstract import Node
-from si4automl.feature_selection import (
+from si4pipeline.abstract import Node
+from si4pipeline.feature_selection import (
     FeatureSelection,
     Lasso,
     MarginalScreening,
     StepwiseFeatureSelection,
 )
-from si4automl.index_operation import (
+from si4pipeline.index_operation import (
     IndexOperation,
     IntersectionFeatures,
     IntersectionOutliers,
     UnionFeatures,
     UnionOutliers,
 )
-from si4automl.missing_imputation import (
+from si4pipeline.missing_imputation import (
     ChebyshevImputation,
     DefiniteRegressionImputation,
     EuclideanImputation,
@@ -25,7 +25,7 @@ from si4automl.missing_imputation import (
     MeanValueImputation,
     MissingImputation,
 )
-from si4automl.outlier_detection import (
+from si4pipeline.outlier_detection import (
     CookDistance,
     Dffits,
     OutlierDetection,

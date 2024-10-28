@@ -14,14 +14,14 @@ from sicore import (  # type: ignore[import]
     polynomial_below_zero,
 )
 
-from si4automl.entity import convert_node_to_config_list
-from si4automl.feature_selection import FeatureSelection
-from si4automl.index_operation import IndexOperation
-from si4automl.missing_imputation import MissingImputation
-from si4automl.outlier_detection import OutlierDetection
+from si4pipeline.entity import convert_node_to_config_list
+from si4pipeline.feature_selection import FeatureSelection
+from si4pipeline.index_operation import IndexOperation
+from si4pipeline.missing_imputation import MissingImputation
+from si4pipeline.outlier_detection import OutlierDetection
 
 if TYPE_CHECKING:
-    from si4automl.abstract import Node, Structure
+    from si4pipeline.abstract import Node, Structure
 
 
 class PipelineManager:

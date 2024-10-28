@@ -2,7 +2,7 @@
 
 from typing import TypeVar
 
-from si4automl.abstract import (
+from si4pipeline.abstract import (
     DetectedOutliers,
     FeatureExtractionConstructor,
     FeatureMatrix,
@@ -16,7 +16,7 @@ from si4automl.abstract import (
     SelectedFeatures,
     Structure,
 )
-from si4automl.pipeline import PipelineManager
+from si4pipeline.pipeline import PipelineManager
 
 
 def initialize_dataset() -> tuple[FeatureMatrix, ResponseVector]:
