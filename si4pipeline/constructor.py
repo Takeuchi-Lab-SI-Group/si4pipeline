@@ -1,4 +1,4 @@
-"""Module containing the constructor functions for the components of the data analysis pipeline."""
+"""Module containing the constructor functions for the components of the feature selection pipeline."""
 
 from typing import TypeVar
 
@@ -20,7 +20,7 @@ from si4pipeline.pipeline import PipelineManager
 
 
 def initialize_dataset() -> tuple[FeatureMatrix, ResponseVector]:
-    """Make the dataset for the data analysis pipeline."""
+    """Make the dataset for the feature selection pipeline."""
     return FeatureMatrix(Structure()), ResponseVector(Structure())
 
 
@@ -214,7 +214,7 @@ def remove_outliers(
 
 
 def construct_pipelines(output: SelectedFeatures) -> PipelineManager:
-    """Make the Structure object of defined data analysis pipeline."""
+    """Make the Structure object of defined feature selection pipeline."""
     structure = output.structure
     structure.update(Node("end"))
     structure.sort_graph()

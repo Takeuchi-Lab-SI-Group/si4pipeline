@@ -1,4 +1,4 @@
-"""Module containing an abstract classes for the components of the data analysis pipeline."""
+"""Module containing an abstract classes for the components of the feature selection pipeline."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import ClassVar, Literal, TypeVar, cast
 
 @dataclass(frozen=True)
 class Node:
-    """A class for the node of the data analysis pipeline."""
+    """A class for the node of the feature selection pipeline."""
 
     type: Literal[
         "start",
@@ -36,7 +36,7 @@ class Node:
 
 
 class Structure:
-    """An abstract class for the structure of the data analysis pipeline."""
+    """An abstract class for the structure of the feature selection pipeline."""
 
     def __init__(self) -> None:
         """Initialize the Structure object."""
@@ -44,12 +44,12 @@ class Structure:
         self.current_node = Node("start")
 
     def update(self, node: Node) -> None:
-        """Update the structure of the data analysis pipeline."""
+        """Update the structure of the feature selection pipeline."""
         self.graph.setdefault(node, set()).add(self.current_node)
         self.current_node = node
 
     def __or__(self, other: Structure) -> Structure:
-        """Take the union of the structures of the data analysis pipelines."""
+        """Take the union of the structures of the feature selection pipelines."""
         structure = Structure()
 
         for key in self.graph.keys() | other.graph.keys():
@@ -65,7 +65,7 @@ class Structure:
         return structure
 
     def sort_graph(self) -> None:
-        """Topologically sort the graph of the data analysis pipeline."""
+        """Topologically sort the graph of the feature selection pipeline."""
         ts = TopologicalSorter(self.graph)
         self.graph = {node: self.graph[node] for node in ts.static_order()}
 

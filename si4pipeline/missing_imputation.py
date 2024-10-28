@@ -85,7 +85,7 @@ class ManhattanImputation(MissingImputation):
     """A class for the manhattan imputation method."""
 
     def __init__(self) -> None:
-        """A class for the manhattan imputation method."""
+        """Initialize the ManhattanImputation object."""
         super().__init__()
 
     def compute_imputer(

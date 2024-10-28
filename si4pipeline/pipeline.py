@@ -25,7 +25,11 @@ if TYPE_CHECKING:
 
 
 class PipelineManager:
-    """A class to manage the data analysis pipelines."""
+    """A class to manage the feature selection pipelines.
+
+    This class is used to manage the feature selection pipelines.
+    It contains three main methods: `tune`, `__call__`, and `inference`.
+    """
 
     def __init__(self, structure: Structure | None = None) -> None:
         """Initialize the PipelineManager object."""
@@ -57,7 +61,22 @@ class PipelineManager:
         max_candidates: int | None = None,
         random_state: int | None = 0,
     ) -> None:
-        """Tune to select the best data analysis pipeline using the cross validation."""
+        """Tune the manager to select the best pipeline as the representing pipeline based on the cross validation error.
+
+        Parameters
+        ----------
+        feature_matrix : np.ndarray
+            The feature matrix.
+        response_vector : np.ndarray
+            The response vector.
+        num_folds : int, optional
+            The number of folds for the cross validation. Defaults to 5.
+        max_candidates : int, optional
+            The maximum number of candidates to consider. If set to None,
+            all candidates are considered. Defaults to None.
+        random_state : int, optional
+            The random state for the random number generator. Defaults to 0.
+        """
         rng = np.random.default_rng(random_state)
 
         if max_candidates is not None:
@@ -94,7 +113,24 @@ class PipelineManager:
         feature_matrix: np.ndarray,
         response_vector: np.ndarray,
     ) -> tuple[list[int], list[int]]:
-        """Perform the representing data analysis pipeline on the given feature matrix and response vector."""
+        """Select features and detect outliers based on the representing pipeline from a given feature matrix and response vector.
+
+        Parameters
+        ----------
+        feature_matrix : np.ndarray
+            The feature matrix.
+        response_vector : np.ndarray
+            The response vector.
+
+        Returns
+        -------
+        tuple[list[int], list[int]]
+            The selected features and detected outliers.
+
+        Notes
+        -----
+        - If the manager is not tuned and has multiple pipelines, it raises an AssertionError.
+        """
         assert self.tuned or len(self.pipelines) == 1
         return self.pipelines[self.representeing_index](feature_matrix, response_vector)
 
@@ -112,7 +148,43 @@ class PipelineManager:
         tuple[list[int], list[float] | list[SelectiveInferenceResult]]
         | tuple[int, float | SelectiveInferenceResult]
     ):
-        """Inference the representing data analysis pipeline on the given feature matrix and response vector."""
+        """Inference on features selected by the representing pipeline from a given feature matrix and response vector.
+
+        Parameters
+        ----------
+        feature_matrix : np.ndarray
+            The feature matrix.
+        response_vector : np.ndarray
+            The response vector.
+        sigma : float, optional
+            The standard deviation of the residuals. If set to None, it is estimated from the given residuals. Defaults to None.
+        test_index : int, optional
+            The index of the selected features to inference on. If set to None,
+            it performs the inference on the whole selected features. Defaults to None.
+        retain_result : bool, optional
+            Whether to retain the SelectiveInferenceResult object. If set to False,
+            it returns only the p-value. Defaults to False.
+        inference_mode : Literal["parametric", "over_conditioning"], optional
+            The mode of the inference. If set to 'parametric',
+            it performs the more powerful selective inference with parametric programming.
+            Or if set to 'over_conditioning', it performs the selective inference
+            with over-conditioning (simple extension of selective inference, lower power).
+            Defaults to 'parametric'.
+        n_jobs : int, optional
+            Number of jobs to run in parallel. This option is only available
+            when the `inference_mode` is set to 'parametric'
+            because the 'over_conditioning' mode is very fast with only single core.
+            If set to -1, the all available cores are used. Defaults to 1.
+
+        Returns
+        -------
+        tuple[list[int], list[float]]
+            The indices of the selected features and corresponding p-values.
+
+        Notes
+        -----
+        - If the manager is not tuned and has multiple pipelines, it raises an AssertionError.
+        """
         assert self.tuned or len(self.pipelines) == 1
         self.M, self.O = self(feature_matrix, response_vector)
         self.X = feature_matrix
@@ -156,7 +228,7 @@ class PipelineManager:
                     self._algorithm,
                     self._model_selector,
                     inference_mode=inference_mode,
-                    n_jobs=n_jobs,
+                    n_jobs=n_jobs if inference_mode == "parametric" else 1,
                 ),
             )
 

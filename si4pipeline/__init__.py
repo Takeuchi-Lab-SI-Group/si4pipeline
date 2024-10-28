@@ -1,4 +1,4 @@
-"""Package for statstical test for data analysis pipeline."""
+"""Package for statstical test for feature selection pipelines."""
 
 from si4pipeline.constructor import (
     chebyshev_imputation,
