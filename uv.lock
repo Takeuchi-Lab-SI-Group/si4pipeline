@@ -985,7 +985,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.26.4" },
+    { name = "numpy", specifier = ">=1.26.4,<2.0.0" },
     { name = "scikit-learn", specifier = ">=1.5.1" },
     { name = "sicore", specifier = ">=2.3.0" },
     { name = "tqdm", specifier = ">=4.66.5" },
