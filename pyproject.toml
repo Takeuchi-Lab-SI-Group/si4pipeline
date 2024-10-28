@@ -15,8 +15,7 @@ maintainers = [{ name = "Tomohiro Shiraishi", email = "shirara1016@gmail.com" }]
 license = "MIT"
 
 [project.urls]
-# documentation =
-repository = "https://github.com/Takeuchi-Lab-SI-Group/sipipeline"
+repository = "https://github.com/Takeuchi-Lab-SI-Group/si4pipeline"
 
 [build-system]
 requires = ["hatchling"]
