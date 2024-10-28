@@ -1,11 +1,11 @@
 [project]
-name = "si4automl"
+name = "si4pipeline"
 version = "1.0.0"
 description = "Package for statistical test for data analysis pipeline by selective inference"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 dependencies = [
-    "sicore>=2.1.0",
+    "sicore>=2.3.0",
     "numpy>=1.26.4",
     "scikit-learn>=1.5.1",
     "tqdm>=4.66.5",
@@ -16,7 +16,7 @@ license = "MIT"
 
 [project.urls]
 # documentation =
-repository = "https://github.com/Takeuchi-Lab-SI-Group/si4automl"
+repository = "https://github.com/Takeuchi-Lab-SI-Group/sipipeline"
 
 [build-system]
 requires = ["hatchling"]
@@ -28,20 +28,18 @@ exclude = [".vscode", "shell", "experiment", "*.ipynb", "figures"]
 [tool.uv]
 dev-dependencies = [
     "ruff>=0.6.2",
-    "mypy>=1.11.1",
     "ipykernel>=6.29.5",
     "pandas>=2.2.2",
     "openpyxl>=3.1.5",
     "xlrd>=2.0.1",
+    "mypy>=1.13.0",
     # "sphinx>=8.0.2",
     # "furo>=2024.8.6",
 ]
 
-[tool.ruff]
-extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
-exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv"]
+exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "*.ipynb"]
 select = ["ALL"]
 ignore = [
     "E501",    # line too long
