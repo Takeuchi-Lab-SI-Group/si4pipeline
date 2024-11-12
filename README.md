@@ -1,4 +1,9 @@
 # si4pipeline
+
+[![PyPI - Version](https://img.shields.io/pypi/v/si4pipeline)](https://pypi.org/project/si4pipeline/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/si4pipeline)](https://pypi.org/project/si4pipeline/)
+[![PyPI - License](https://img.shields.io/pypi/l/si4pipeline)](https://opensource.org/license/MIT)
+
 This package provides the statistical test for any feature selection pipeline by selective inference.
 The tequnical details are described in the paper "[Statistical Test for Feature Selection Pipelines by Selective Inference](https://arxiv.org/abs/2406.18902)".
 
@@ -16,5 +21,5 @@ $ pip install si4pipeline
 ```
 
 ## Usage
-The implementation we developed can be interactively executed using the provided `demonstration.ipynb` file.
+The implementation we developed can be interactively executed using the provided `demonstration.ipynb` [file](https://github.com/Takeuchi-Lab-SI-Group/si4pipeline/blob/main/demonstration.ipynb) in our repository.
 This file contains a step-by-step guide on how to use the package, how to construct a feature selection pipeline, and how to apply the proposed method to a given feature selection pipeline.
