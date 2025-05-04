@@ -7,6 +7,8 @@
 This package provides the statistical test for any feature selection pipeline by selective inference.
 The tequnical details are described in the paper "[Statistical Test for Feature Selection Pipelines by Selective Inference](https://arxiv.org/abs/2406.18902)".
 
+This package can also be used with an interactive GUI by using [si4pipeline-gui](https://github.com/Takeuchi-Lab-SI-Group/si4pipeline-gui).
+
 ## Installation & Requirements
 This package has the following dependencies:
 - Python (version 3.10 or higher, we use 3.12.5)
